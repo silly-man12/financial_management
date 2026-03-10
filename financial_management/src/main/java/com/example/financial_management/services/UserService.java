@@ -125,7 +125,8 @@ public class UserService {
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        if (user.getRole() == Role.ADMIN) {
+        if (user.getId().equals(auth.getUUID())) {
+            // Admin không được phép thay đổi trạng thái của chính mình
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Can't change status");
         } else {
             user.setStatus(request.getStatus());
