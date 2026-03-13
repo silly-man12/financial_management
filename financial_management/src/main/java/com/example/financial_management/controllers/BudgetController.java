@@ -68,4 +68,12 @@ public class BudgetController {
                 .withData(() -> budgetService.updateBudget(budgetId, request, auth));
     }
 
+    @PostMapping("/delete")
+    public ResponseEntity<AbstractResponse<String>> deleteBudget(@RequestParam UUID budgetId,
+            @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
+        return new AbstractResponse<String>()
+                .withData(() -> {
+                    return budgetService.deleteBudget(budgetId, auth);
+                });
+    }
 }
