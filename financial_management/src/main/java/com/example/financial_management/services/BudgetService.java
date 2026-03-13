@@ -125,6 +125,20 @@ public class BudgetService {
         return response;
     }
 
+    public String deleteBudget(UUID budgetId, Auth auth) {
+        User user = validateUser(auth);
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found"));
+
+        if (!budget.getUserId().equals(user.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        budgetRepository.delete(budget);
+        log.info("Budget deleted: {}", budgetId);
+        return "Budget deleted successfully";
+    }
+
     private void validateBudgetRequest(BudgetRequest request) {
         if (request.getCategory() < 0) {
             throw new IllegalArgumentException("Category must be a positive integer");
