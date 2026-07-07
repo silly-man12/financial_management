@@ -1,5 +1,7 @@
 package com.example.financial_management.controllers;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,11 +20,14 @@ import com.example.financial_management.model.report.response.CompareReportRespo
 import com.example.financial_management.model.report.response.DailyReportResponse;
 import com.example.financial_management.model.report.response.MonthlyReportResponse;
 import com.example.financial_management.model.report.response.SummaryReportResponse;
+import com.example.financial_management.model.transaction.TransactionResponse;
 import com.example.financial_management.services.ReportService;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/reports")
@@ -31,6 +36,15 @@ import lombok.RequiredArgsConstructor;
 public class ReportController {
 
     private final ReportService reportService;
+
+    @GetMapping("/chart")
+    public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getSummaryByDataRange(
+            @Parameter(description = "Start date in format yyMMdd", example = "260301", required = true) @RequestParam String startDate,
+            @Parameter(description = "End date in format yyMMdd", example = "260331", required = true) @RequestParam String endDate,
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+        return new AbstractResponse<List<TransactionResponse>>()
+                .withData(() -> reportService.getSummaryByDataRange(auth, startDate, endDate));
+    }
 
     @PostMapping("/summary")
     public ResponseEntity<AbstractResponse<SummaryReportResponse>> getSummary(@RequestBody SummaryReportRequest request,

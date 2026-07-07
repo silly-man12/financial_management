@@ -28,7 +28,9 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.financial_management.constant.Category;
 import com.example.financial_management.constant.Status;
 import com.example.financial_management.constant.TransactionType;
+import com.example.financial_management.entity.Transaction;
 import com.example.financial_management.entity.User;
+import com.example.financial_management.mapper.TransactionMapper;
 import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.report.request.CategoryReportRequest;
 import com.example.financial_management.model.report.request.ReportRequest;
@@ -42,6 +44,7 @@ import com.example.financial_management.model.report.response.DailyReportRespons
 import com.example.financial_management.model.report.response.MonthlyReportResponse;
 import com.example.financial_management.model.report.response.MonthlyReportResponseItem;
 import com.example.financial_management.model.report.response.SummaryReportResponse;
+import com.example.financial_management.model.transaction.TransactionResponse;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
 
@@ -53,8 +56,23 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ReportService {
         private final TransactionRepository transactionRepository;
+        private final TransactionMapper transactionMapper;
         private final UserRepository userRepository;
         private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0");
+
+        public List<TransactionResponse> getSummaryByDataRange(Auth auth, String from, String to) {
+                LocalDateTime startDate = parseDate(from);
+                LocalDateTime endDate = parseDate(to);
+
+                List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                auth.getUUID(), startDate, endDate);
+
+                List<TransactionResponse> response = List.copyOf(transactions.stream()
+                                .map(transactionMapper::toResponse)
+                                .toList());
+
+                return response;
+        }
 
         public SummaryReportResponse getSummary(SummaryReportRequest request, Auth auth) {
                 User user = getUser(auth);
@@ -464,6 +482,30 @@ public class ReportService {
 
         private String formatMoney(BigDecimal amount) {
                 return MONEY_FORMAT.format(amount);
+        }
+
+        private LocalDateTime parseDate(String dateString) {
+                try {
+                        // Handle yyMMdd format (e.g., "250610" for June 10, 2025)
+                        if (dateString.matches("\\d{6}")) {
+                                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyMMdd");
+                                java.time.LocalDate date = java.time.LocalDate.parse(dateString, formatter);
+                                return date.atStartOfDay();
+                        }
+
+                        // Handle yyyy-MM-dd format (existing functionality)
+                        if (dateString.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                                return LocalDateTime.parse(dateString + "T00:00:00");
+                        }
+
+                        // Try to parse as ISO date format
+                        return LocalDateTime.parse(dateString + "T00:00:00");
+
+                } catch (Exception e) {
+                        log.error("Error parsing date: {}", dateString, e);
+                        throw new IllegalArgumentException(
+                                        "Invalid date format. Expected: yyMMdd or yyyy-MM-dd, got: " + dateString);
+                }
         }
 
 }
