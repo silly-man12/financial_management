@@ -7,6 +7,7 @@ import lombok.Data;
 
 @Data
 public class BudgetResponse {
+    private UUID id;
     private UUID userId;
     private int category;
     private String description;

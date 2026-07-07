@@ -43,6 +43,7 @@ public class TransactionController {
 
         // Các endpoint khác sẽ được thêm vào đây
 
+        // Lấy thông tin giao dịch theo ID
         @GetMapping("/{id}")
         public ResponseEntity<AbstractResponse<TransactionResponse>> getById(
                         @RequestParam UUID id,
@@ -51,6 +52,7 @@ public class TransactionController {
                                 .withData(() -> transactionService.getById(id, auth));
         }
 
+        // Lấy tất cả giao dịch với phân trang
         @GetMapping("/all")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAll(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
@@ -62,6 +64,7 @@ public class TransactionController {
                                                 PageRequest.of(page - 1, size)));
         }
 
+        // Lấy tất cả giao dịch theo accountId với phân trang
         @GetMapping("/{accountId}/all")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAllByAccount(
                         @PathVariable UUID accountId,
@@ -73,6 +76,7 @@ public class TransactionController {
                                                 auth, PageRequest.of(page - 1, size)));
         }
 
+        // Tạo giao dịch mới với khả năng upload file
         @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<AbstractResponse<TransactionResponse>> createTransaction(
                         @ModelAttribute TransactionDateRequest request,
@@ -82,6 +86,7 @@ public class TransactionController {
                                 .withData(() -> transactionService.createTransaction(request, auth, file));
         }
 
+        // Cập nhật giao dịch theo ID
         @PostMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<AbstractResponse<TransactionUpdateResponse>> updateTransaction(
                         @PathVariable("id") UUID transactionId,
@@ -94,12 +99,14 @@ public class TransactionController {
                                                 file));
         }
 
+        // Xóa giao dịch theo ID
         @DeleteMapping("/{id}")
         public ResponseEntity<AbstractResponse<Boolean>> dropTransaction(@RequestParam UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<Boolean>().withData(() -> transactionService.deleteTransaction(id, auth));
         }
 
+        // Lọc giao dịch theo các tiêu chí
         @PostMapping("/filter")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> filterTransactions(
                         @RequestBody TransactionFilterRequest filter,
@@ -109,6 +116,7 @@ public class TransactionController {
                                 .withData(() -> transactionService.filterTransactions(auth, filter));
         }
 
+        // Chuyển tiền giữa các tài khoản
         @PostMapping("/transfer")
         public ResponseEntity<AbstractResponse<TransactionResponse>> transfer(@RequestBody TransferRequest request,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
