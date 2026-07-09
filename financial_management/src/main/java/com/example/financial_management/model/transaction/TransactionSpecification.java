@@ -32,17 +32,12 @@ public class TransactionSpecification {
                 ));
             }
 
-            if (request.getCategory() != 0) { // giả sử 0 = không lọc
-                predicates.add(cb.equal(root.get("category"), request.getCategory()));
+            if (request.getCategory() != null && !request.getCategory().isEmpty()) {
+                predicates.add(root.get("category").in(request.getCategory()));
             }
-            if (request.getType() != 0) { // giả sử 0 = không lọc
+
+            if (request.getType() != null) { // giả sử null = không lọc
                 predicates.add(cb.equal(root.get("type"), request.getType()));
-            }
-            if (request.getMinAmount() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), request.getMinAmount()));
-            }
-            if (request.getMaxAmount() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("amount"), request.getMaxAmount()));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
