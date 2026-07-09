@@ -1,7 +1,7 @@
 package com.example.financial_management.model.transaction;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import lombok.Data;
 
@@ -9,10 +9,8 @@ import lombok.Data;
 public class TransactionFilterRequest {
     private LocalDate fromDate;
     private LocalDate toDate;
-    private int category;
-    private int type;
-    private BigDecimal minAmount;
-    private BigDecimal maxAmount;
+    private List<Integer> category;
+    private Integer type;
     private int page = 1;
     private int size = 20;
 }
