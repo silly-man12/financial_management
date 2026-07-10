@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -210,7 +211,10 @@ public class TransactionService {
     public PageResponse<TransactionResponse> filterTransactions(Auth auth, TransactionFilterRequest filter) {
         User user = getUser(auth);
 
-        Pageable pageable = PageRequest.of(filter.getPage() - 1, filter.getSize());
+        Pageable pageable = PageRequest.of(
+                filter.getPage() - 1,
+                filter.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
 
         Page<Transaction> result = transactionRepository.findAll(
                 TransactionSpecification.filter(
