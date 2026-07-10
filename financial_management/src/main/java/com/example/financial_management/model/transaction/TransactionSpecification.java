@@ -32,6 +32,10 @@ public class TransactionSpecification {
                 ));
             }
 
+            if (request.getAccountId() != null && !request.getAccountId().isEmpty()) {
+                predicates.add(root.get("accountId").in(request.getAccountId()));
+            }
+
             if (request.getCategory() != null && !request.getCategory().isEmpty()) {
                 predicates.add(root.get("category").in(request.getCategory()));
             }
