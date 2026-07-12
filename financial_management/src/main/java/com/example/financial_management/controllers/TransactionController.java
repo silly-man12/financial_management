@@ -101,7 +101,7 @@ public class TransactionController {
 
         // Xóa giao dịch theo ID
         @DeleteMapping("/{id}")
-        public ResponseEntity<AbstractResponse<Boolean>> dropTransaction(@RequestParam UUID id,
+        public ResponseEntity<AbstractResponse<Boolean>> dropTransaction(@PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<Boolean>().withData(() -> transactionService.deleteTransaction(id, auth));
         }
