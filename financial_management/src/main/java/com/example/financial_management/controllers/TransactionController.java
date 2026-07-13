@@ -46,7 +46,7 @@ public class TransactionController {
         // Lấy thông tin giao dịch theo ID
         @GetMapping("/{id}")
         public ResponseEntity<AbstractResponse<TransactionResponse>> getById(
-                        @RequestParam UUID id,
+                        @PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<TransactionResponse>()
                                 .withData(() -> transactionService.getById(id, auth));

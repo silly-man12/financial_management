@@ -13,6 +13,7 @@ public class TransactionResponse {
     private UUID userId;
     private BigDecimal amount;
     private int type;
+    private int currency;
     private int category;
     private String description;
     private String imagePath;
