@@ -107,6 +107,64 @@ public class AccountService {
         return true;
     }
 
+    @Transactional
+    public void updateBalanceForTransactionUpdate(
+            Account oldAccount,
+            Account newAccount,
+            Transaction oldTransaction,
+            TransactionRequest newTransaction) {
+
+        // Không đổi tài khoản
+        if (oldAccount.getId().equals(newAccount.getId())) {
+            BigDecimal delta = calculateFinalDelta(oldTransaction, newTransaction);
+            applyDelta(newAccount, delta);
+            return;
+        }
+
+        // Hoàn tác giao dịch cũ trên tài khoản cũ
+        BigDecimal oldBalance = oldAccount.getBalance();
+
+        switch (oldTransaction.getType()) {
+            case TransactionType.INCOME:
+                oldBalance = oldBalance.subtract(oldTransaction.getAmount());
+                break;
+
+            case TransactionType.EXPENSE:
+            case TransactionType.TRANSFER:
+                oldBalance = oldBalance.add(oldTransaction.getAmount());
+                break;
+        }
+
+        if (oldBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance");
+        }
+
+        oldAccount.setBalance(oldBalance);
+
+        // Áp dụng giao dịch mới lên tài khoản mới
+        BigDecimal newBalance = newAccount.getBalance();
+
+        switch (newTransaction.getType()) {
+            case TransactionType.INCOME:
+                newBalance = newBalance.add(newTransaction.getAmount());
+                break;
+
+            case TransactionType.EXPENSE:
+            case TransactionType.TRANSFER:
+                newBalance = newBalance.subtract(newTransaction.getAmount());
+                break;
+        }
+
+        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance");
+        }
+
+        newAccount.setBalance(newBalance);
+
+        accountRepository.save(oldAccount);
+        accountRepository.save(newAccount);
+    }
+
     public AccountResponse getAccountById(UUID accountId, Auth auth) {
         Account account = validateAccount(accountId, auth, Status.ACTIVE);
 

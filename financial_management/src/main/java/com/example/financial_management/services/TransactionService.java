@@ -119,15 +119,27 @@ public class TransactionService {
     @Transactional
     public TransactionUpdateResponse updateTransaction(TransactionRequest updated, Auth auth, UUID transactionId,
             MultipartFile file) {
-        Account account = accountService.validateAccount(updated.getAccountId(), auth, Status.ACTIVE);
-
-        Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, account.getUserId())
+        Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new RuntimeException("Transaction not found or access denied"));
+
+        Account oldAccount = accountService.validateAccount(
+                transaction.getAccountId(),
+                auth,
+                Status.ACTIVE);
+
+        Account newAccount = accountService.validateAccount(
+                updated.getAccountId(),
+                auth,
+                Status.ACTIVE);
 
         BigDecimal finalDelta = accountService.calculateFinalDelta(transaction, updated);
 
         // validate và áp dụng
-        accountService.applyDelta(account, finalDelta);
+        accountService.updateBalanceForTransactionUpdate(
+                oldAccount,
+                newAccount,
+                transaction,
+                updated);
 
         // Cập nhật transaction
         transaction.setAmount(updated.getAmount());
@@ -136,7 +148,7 @@ public class TransactionService {
         transaction.setAccountId(updated.getAccountId());
         transaction.setUserId(UUID.fromString(auth.getId()));
 
-        validateCurrency(updated.getCurrency(), account);
+        validateCurrency(updated.getCurrency(), newAccount);
         validateCategory(updated.getType(), updated.getCategory());
         handleTransactionImage(transaction, updated.isHaveImage(), file);
 
