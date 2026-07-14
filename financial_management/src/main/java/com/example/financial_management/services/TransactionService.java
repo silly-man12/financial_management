@@ -9,7 +9,6 @@ import com.example.financial_management.entity.User;
 import com.example.financial_management.mapper.TransactionMapper;
 import com.example.financial_management.model.PageResponse;
 import com.example.financial_management.model.auth.Auth;
-import com.example.financial_management.model.transaction.TransactionDateRequest;
 import com.example.financial_management.model.transaction.TransactionFilterRequest;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.model.transaction.TransactionResponse;
@@ -90,7 +89,7 @@ public class TransactionService {
     }
 
     @Transactional
-    public TransactionResponse createTransaction(TransactionDateRequest request, Auth auth, MultipartFile file) {
+    public TransactionResponse createTransaction(TransactionRequest request, Auth auth, MultipartFile file) {
         Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
         validateCurrency(request.getCurrency(), account);
@@ -148,6 +147,7 @@ public class TransactionService {
         transaction.setType(updated.getType());
         transaction.setAccountId(updated.getAccountId());
         transaction.setUserId(UUID.fromString(auth.getId()));
+        transaction.setCreatedAt(updated.getCreateAt().toLocalDateTime());
 
         validateCurrency(updated.getCurrency(), newAccount);
         validateCategory(updated.getType(), updated.getCategory());
@@ -290,12 +290,17 @@ public class TransactionService {
     private String saveImage(MultipartFile file) {
         try {
             String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-            Path path = Paths.get(uploadDir + fileName);
-            Files.createDirectories(path.getParent());
-            Files.write(path, file.getBytes());
 
-            // Trả về path để FE dùng (có thể đổi thành full URL nếu cần)
-            return uploadDir + fileName;
+            Path uploadPath = Paths.get(uploadDir);
+            Files.createDirectories(uploadPath);
+
+            Path filePath = uploadPath.resolve(fileName);
+
+            Files.write(filePath, file.getBytes());
+
+            // Chỉ lưu đường dẫn public
+            return "images/" + fileName;
+
         } catch (Exception e) {
             throw new RuntimeException("Upload file thất bại", e);
         }

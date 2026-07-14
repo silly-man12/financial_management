@@ -8,7 +8,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.example.financial_management.model.AbstractResponse;
 import com.example.financial_management.model.PageResponse;
 import com.example.financial_management.model.auth.Auth;
-import com.example.financial_management.model.transaction.TransactionDateRequest;
 import com.example.financial_management.model.transaction.TransactionFilterRequest;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.model.transaction.TransactionResponse;
@@ -79,7 +78,7 @@ public class TransactionController {
         // Tạo giao dịch mới với khả năng upload file
         @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<AbstractResponse<TransactionResponse>> createTransaction(
-                        @ModelAttribute TransactionDateRequest request,
+                        @ModelAttribute TransactionRequest request,
                         @RequestPart(value = "file", required = false) MultipartFile file,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<TransactionResponse>()

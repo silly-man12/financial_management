@@ -1,6 +1,7 @@
 package com.example.financial_management.model.transaction;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import lombok.Data;
@@ -14,4 +15,5 @@ public class TransactionRequest {
     private int currency;
     private String description;
     private boolean haveImage;
+    private OffsetDateTime createAt;
 }
