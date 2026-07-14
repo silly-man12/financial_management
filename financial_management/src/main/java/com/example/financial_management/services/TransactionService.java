@@ -51,7 +51,8 @@ public class TransactionService {
     public PageResponse<TransactionResponse> getAllTransactions(Auth auth, Pageable pageable) {
         User user = getUser(auth);
 
-        Page<TransactionResponse> pageResult = transactionRepository.findByUserId(user.getId(), pageable)
+        Page<TransactionResponse> pageResult = transactionRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
                 .map(transactionMapper::toResponse);
 
         PageResponse<TransactionResponse> response = new PageResponse<>(
