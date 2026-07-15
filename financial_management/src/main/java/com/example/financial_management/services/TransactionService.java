@@ -30,6 +30,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -275,15 +276,51 @@ public class TransactionService {
         }
     }
 
-    private void handleTransactionImage(Transaction transaction, boolean haveImage, MultipartFile file) {
-        if (haveImage) {
-            if (file != null && !file.isEmpty()) {
-                String newPath = saveImage(file);
-                transaction.setImagePath(newPath);
+    private void handleTransactionImage(
+            Transaction transaction,
+            boolean haveImage,
+            MultipartFile file) {
+
+        // Người dùng bỏ ảnh
+        if (!haveImage) {
+
+            if (transaction.getImagePath() != null) {
+                deleteImage(transaction.getImagePath());
             }
-            // nếu file null hoặc empty → giữ ảnh cũ, không cần set gì
-        } else {
-            transaction.setImagePath(null); // xóa ảnh
+
+            transaction.setImagePath(null);
+            return;
+        }
+
+        // Có ảnh nhưng không upload ảnh mới
+        if (file == null || file.isEmpty()) {
+            return;
+        }
+
+        // Có upload ảnh mới
+        if (transaction.getImagePath() != null) {
+            deleteImage(transaction.getImagePath());
+        }
+
+        String newPath = saveImage(file);
+
+        transaction.setHaveImage(true);
+        transaction.setImagePath(newPath);
+    }
+
+    private void deleteImage(String imagePath) {
+        if (imagePath == null || imagePath.isBlank()) {
+            return;
+        }
+
+        try {
+            Path filePath = Paths.get(uploadDir)
+                    .resolve(Paths.get(imagePath).getFileName());
+
+            Files.deleteIfExists(filePath);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Xóa ảnh thất bại", e);
         }
     }
 
