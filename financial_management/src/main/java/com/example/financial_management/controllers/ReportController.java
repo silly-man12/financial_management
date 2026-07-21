@@ -1,6 +1,7 @@
 package com.example.financial_management.controllers;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,6 +16,7 @@ import com.example.financial_management.model.report.request.CategoryReportReque
 import com.example.financial_management.model.report.request.ReportRequest;
 import com.example.financial_management.model.report.request.MonthlyReportRequest;
 import com.example.financial_management.model.report.request.SummaryReportRequest;
+import com.example.financial_management.model.report.response.AccountSummary;
 import com.example.financial_management.model.report.response.CategoryReportResponse;
 import com.example.financial_management.model.report.response.CompareReportResponse;
 import com.example.financial_management.model.report.response.DailyReportResponse;
@@ -27,6 +29,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
@@ -44,6 +47,14 @@ public class ReportController {
             @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<List<TransactionResponse>>()
                 .withData(() -> reportService.getSummaryByDataRange(auth, startDate, endDate));
+    }
+
+    @GetMapping("/account/{accountId}")
+    public ResponseEntity<AbstractResponse<AccountSummary>> getReportByAccount(
+            @PathVariable UUID accountId,
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+        return new AbstractResponse<AccountSummary>()
+                .withData(() -> reportService.getReportByAccount(accountId, auth));
     }
 
     @PostMapping("/summary")
