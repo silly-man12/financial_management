@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.itextpdf.text.*;
@@ -28,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.financial_management.constant.Category;
 import com.example.financial_management.constant.Status;
 import com.example.financial_management.constant.TransactionType;
+import com.example.financial_management.entity.Account;
 import com.example.financial_management.entity.Transaction;
 import com.example.financial_management.entity.User;
 import com.example.financial_management.mapper.TransactionMapper;
@@ -36,6 +38,7 @@ import com.example.financial_management.model.report.request.CategoryReportReque
 import com.example.financial_management.model.report.request.ReportRequest;
 import com.example.financial_management.model.report.request.MonthlyReportRequest;
 import com.example.financial_management.model.report.request.SummaryReportRequest;
+import com.example.financial_management.model.report.response.AccountSummary;
 import com.example.financial_management.model.report.response.CategoryReportItem;
 import com.example.financial_management.model.report.response.CategoryReportResponse;
 import com.example.financial_management.model.report.response.CompareReportResponse;
@@ -45,6 +48,7 @@ import com.example.financial_management.model.report.response.MonthlyReportRespo
 import com.example.financial_management.model.report.response.MonthlyReportResponseItem;
 import com.example.financial_management.model.report.response.SummaryReportResponse;
 import com.example.financial_management.model.transaction.TransactionResponse;
+import com.example.financial_management.repository.AccountRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
 
@@ -55,6 +59,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class ReportService {
+        private final AccountRepository accountRepository;
         private final TransactionRepository transactionRepository;
         private final TransactionMapper transactionMapper;
         private final UserRepository userRepository;
@@ -299,6 +304,44 @@ public class ReportService {
         public ResponseEntity<byte[]> exportMonthlyReportByYearPDF(MonthlyReportRequest request, Auth auth) {
                 byte[] pdf = buildMonthlyReportByYearPDF(request, auth);
                 return buildPdfResponse(pdf, "report-" + request.getYear() + ".pdf");
+        }
+
+        public AccountSummary getReportByAccount(UUID accountId, Auth auth) {
+                User user = getUser(auth);
+                validateAccountAccess(auth, accountId);
+
+                // Lấy thông tin account
+                Account account = accountRepository.findByIdAndUserId(accountId, user.getId())
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Account not found"));
+
+                // Tính toán số dư đầu kỳ và cuối kỳ
+                BigDecimal endBalance = account.getBalance(); // Giả sử đây là số dư cuối kỳ
+
+                // Tính tổng thu nhập và chi phí
+                BigDecimal totalIncome = transactionRepository.sumAmountByType(user.getId(), accountId,
+                                TransactionType.INCOME).orElse(BigDecimal.ZERO);
+                BigDecimal totalExpense = transactionRepository.sumAmountByType(user.getId(), accountId,
+                                TransactionType.EXPENSE).orElse(BigDecimal.ZERO);
+
+                BigDecimal remaining = totalIncome.subtract(totalExpense);
+                BigDecimal startBalance = endBalance.add(remaining);
+
+                // Lấy lịch sử giao dịch
+                List<TransactionResponse> balanceHistory = transactionRepository.findAllByAccountIdAndUserId(
+                                accountId, user.getId()).stream()
+                                .map(transactionMapper::toResponse)
+                                .toList();
+
+                // Tạo response
+                AccountSummary summary = new AccountSummary();
+                summary.setStartBalance(startBalance);
+                summary.setEndBalance(endBalance);
+                summary.setTotalIncome(totalIncome);
+                summary.setTotalExpense(totalExpense);
+                summary.setBalanceHistory(balanceHistory);
+
+                return summary;
         }
 
         // --- Private helper để tạo file PDF ---
