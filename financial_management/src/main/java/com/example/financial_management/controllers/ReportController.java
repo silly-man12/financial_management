@@ -20,6 +20,7 @@ import com.example.financial_management.model.report.response.AccountSummary;
 import com.example.financial_management.model.report.response.CategoryReportResponse;
 import com.example.financial_management.model.report.response.CompareReportResponse;
 import com.example.financial_management.model.report.response.DailyReportResponse;
+import com.example.financial_management.model.report.response.DistributionSummary;
 import com.example.financial_management.model.report.response.MonthlyReportResponse;
 import com.example.financial_management.model.report.response.SummaryReportResponse;
 import com.example.financial_management.model.transaction.TransactionResponse;
@@ -55,6 +56,14 @@ public class ReportController {
             @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<AccountSummary>()
                 .withData(() -> reportService.getReportByAccount(accountId, auth));
+    }
+
+    @GetMapping("/distribution/{accountId}")
+    public ResponseEntity<AbstractResponse<DistributionSummary>> getReportDistributionByAccount(
+            @PathVariable UUID accountId,
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+        return new AbstractResponse<DistributionSummary>()
+                .withData(() -> reportService.getReportDistributionByAccount(accountId, auth));
     }
 
     @PostMapping("/summary")
