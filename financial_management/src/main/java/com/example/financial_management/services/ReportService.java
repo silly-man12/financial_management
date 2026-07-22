@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.example.financial_management.model.report.response.CategoryDistribution;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.*;
 
@@ -44,6 +45,7 @@ import com.example.financial_management.model.report.response.CategoryReportResp
 import com.example.financial_management.model.report.response.CompareReportResponse;
 import com.example.financial_management.model.report.response.DailyReportResponse;
 import com.example.financial_management.model.report.response.DailyReportResponseItem;
+import com.example.financial_management.model.report.response.DistributionSummary;
 import com.example.financial_management.model.report.response.MonthlyReportResponse;
 import com.example.financial_management.model.report.response.MonthlyReportResponseItem;
 import com.example.financial_management.model.report.response.SummaryReportResponse;
@@ -325,7 +327,7 @@ public class ReportService {
                                 TransactionType.EXPENSE).orElse(BigDecimal.ZERO);
 
                 BigDecimal remaining = totalIncome.subtract(totalExpense);
-                BigDecimal startBalance = endBalance.add(remaining);
+                BigDecimal startBalance = endBalance.subtract(remaining);
 
                 // Lấy lịch sử giao dịch
                 List<TransactionResponse> balanceHistory = transactionRepository.findAllByAccountIdAndUserId(
@@ -340,6 +342,46 @@ public class ReportService {
                 summary.setTotalIncome(totalIncome);
                 summary.setTotalExpense(totalExpense);
                 summary.setBalanceHistory(balanceHistory);
+
+                return summary;
+        }
+
+        public DistributionSummary getReportDistributionByAccount(UUID accountId, Auth auth) {
+                User user = getUser(auth);
+                validateAccountAccess(auth, accountId);
+
+                // Lấy thông tin account
+                Account account = accountRepository.findByIdAndUserId(accountId, user.getId())
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Account not found"));
+
+                // Tính toán số dư đầu kỳ và cuối kỳ
+                BigDecimal endBalance = account.getBalance(); // Giả sử đây là số dư cuối kỳ
+
+                // Tính tổng thu nhập và chi phí
+                BigDecimal totalIncome = transactionRepository.sumAmountByType(user.getId(), accountId,
+                                TransactionType.INCOME).orElse(BigDecimal.ZERO);
+                BigDecimal totalExpense = transactionRepository.sumAmountByType(user.getId(), accountId,
+                                TransactionType.EXPENSE).orElse(BigDecimal.ZERO);
+
+                BigDecimal remaining = totalIncome.subtract(totalExpense);
+                BigDecimal startBalance = endBalance.subtract(remaining);
+
+                // Lấy lịch sử giao dịch
+                List<CategoryDistribution> incomeByCategory = transactionRepository.sumAmountByCategoryAndType(
+                                user.getId(), accountId, TransactionType.INCOME);
+
+                List<CategoryDistribution> expenseByCategory = transactionRepository.sumAmountByCategoryAndType(
+                                user.getId(), accountId, TransactionType.EXPENSE);
+
+                // Tạo response
+                DistributionSummary summary = new DistributionSummary();
+                summary.setStartBalance(startBalance);
+                summary.setEndBalance(endBalance);
+                summary.setTotalIncome(totalIncome);
+                summary.setTotalExpense(totalExpense);
+                summary.setIncomeByCategory(incomeByCategory);
+                summary.setExpenseByCategory(expenseByCategory);
 
                 return summary;
         }
