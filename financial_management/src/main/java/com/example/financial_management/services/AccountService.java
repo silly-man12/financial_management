@@ -17,7 +17,6 @@ import com.example.financial_management.entity.User;
 import com.example.financial_management.mapper.AccountMapper;
 import com.example.financial_management.model.account.AccountRequest;
 import com.example.financial_management.model.account.AccountResponse;
-import com.example.financial_management.model.account.AccountStatus;
 import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.repository.AccountRepository;
@@ -80,17 +79,17 @@ public class AccountService {
     }
 
     @Transactional
-    public AccountResponse updateStatusAccount(AccountStatus accountStatus, Auth auth) {
+    public AccountResponse updateStatusAccount(UUID accountId, int status, Auth auth) {
         User user = validateUser(auth);
-        Account account = accountRepository.findByIdAndUserId(accountStatus.getId(), user.getId())
+        Account account = accountRepository.findByIdAndUserId(accountId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
 
         // Chỉ cho phép chuyển trạng thái ACTIVE hoặc INACTIVE
-        if (accountStatus.getStatus() != Status.ACTIVE && accountStatus.getStatus() != Status.INACTIVE) {
+        if (status != Status.ACTIVE && status != Status.INACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
         }
 
-        account.setStatus(accountStatus.getStatus());
+        account.setStatus(status);
         Account saved = accountRepository.saveAndFlush(account);
 
         return accountMapper.toResponse(saved);
@@ -173,7 +172,7 @@ public class AccountService {
 
     public List<AccountResponse> getAllAccounts(Auth auth) {
         User user = validateUser(auth);
-        List<Account> accounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
+        List<Account> accounts = accountRepository.findAllByUserId(user.getId());
         return accounts.stream()
                 .map(accountMapper::toResponse)
                 .toList();

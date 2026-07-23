@@ -13,6 +13,8 @@ import com.example.financial_management.entity.Account;
 public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findByIdAndUserId(UUID id, UUID userId);
 
+    List<Account> findAllByUserId(UUID userId);
+
     List<Account> findAllByUserIdAndStatus(UUID userId, int status);
 
     List<Account> findAllByUserIdAndCurrency(UUID userId, int currency);
