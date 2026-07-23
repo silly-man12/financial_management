@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.financial_management.model.AbstractResponse;
 import com.example.financial_management.model.account.AccountRequest;
 import com.example.financial_management.model.account.AccountResponse;
-import com.example.financial_management.model.account.AccountStatus;
 import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.services.AccountService;
 
@@ -46,10 +46,10 @@ public class AccountController {
 
     @PostMapping("/{id}/status")
     public ResponseEntity<AbstractResponse<AccountResponse>> updateAccountStatus(
-            @RequestBody AccountStatus accountStatus,
+            @PathVariable("id") UUID accountId, @RequestParam int status,
             @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<AccountResponse>()
-                .withData(() -> accountService.updateStatusAccount(accountStatus, auth));
+                .withData(() -> accountService.updateStatusAccount(accountId, status, auth));
     }
 
     @DeleteMapping("/{id}")
@@ -66,7 +66,8 @@ public class AccountController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AbstractResponse<AccountResponse>> getAccountId(@Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
+    public ResponseEntity<AbstractResponse<AccountResponse>> getAccountId(
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
             @PathVariable("id") UUID accountId) {
         return new AbstractResponse<AccountResponse>().withData(() -> accountService.getAccountById(accountId, auth));
     }
