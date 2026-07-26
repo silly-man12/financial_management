@@ -185,41 +185,70 @@ public class TransactionService {
     }
 
     @Transactional
-    public TransactionResponse transfer(TransferRequest request, Auth auth) {
-        // Lấy user
+    public TransactionResponse createTransfer(TransferRequest request, Auth auth) {
         User user = getUser(auth);
 
-        // Lấy transaction cũ
-        Transaction transaction = transactionRepository.findByIdAndUserId(request.getTransactionId(), user.getId())
-                .orElseThrow(() -> new RuntimeException("Transaction not found or access denied"));
-
-        // Lấy account cũ và account mới
-        Account oldAccount = accountService.validateAccount(transaction.getAccountId(), auth, Status.ACTIVE);
-        Account newAccount = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
-
-        // Validate currency
-        if (oldAccount.getCurrency() != newAccount.getCurrency()) {
-            throw new RuntimeException("Currency mismatch between accounts");
+        if (request.getAccountId() == null || request.getTargetAccountId() == null) {
+            throw new RuntimeException("Source and target account IDs are required");
         }
 
-        if (oldAccount.getId().equals(newAccount.getId())) {
-            throw new RuntimeException("Cannot transfer to the same account");
+        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Transfer amount must be greater than zero");
         }
 
-        // Rollback delta ở account cũ
-        BigDecimal oldDelta = transaction.getType() == TransactionType.INCOME
-                ? transaction.getAmount()
-                : transaction.getAmount().negate();
-        accountService.applyDelta(oldAccount, oldDelta.negate());
+        if (request.getAccountId().equals(request.getTargetAccountId())) {
+            throw new RuntimeException("Source and target accounts must be different");
+        }
 
-        // Apply delta cho account mới
-        accountService.applyDelta(newAccount, oldDelta);
+        Account sourceAccount = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
+        Account targetAccount = accountService.validateAccount(request.getTargetAccountId(), auth, Status.ACTIVE);
 
-        // Cập nhật transaction sang account mới
-        transaction.setAccountId(newAccount.getId());
-        Transaction saved = transactionRepository.save(transaction);
+        if (sourceAccount.getCurrency() != targetAccount.getCurrency()) {
+            throw new RuntimeException("Source and target accounts must have the same currency");
+        }
 
-        return transactionMapper.toResponse(saved);
+        Transaction sourceTransaction = buildTransferTransaction(
+                user.getId(),
+                sourceAccount.getId(),
+                request.getAmount(),
+                request.getDescription(),
+                request.getCreateAt(),
+                sourceAccount.getCurrency());
+
+        Transaction targetTransaction = buildTransferTransaction(
+                user.getId(),
+                targetAccount.getId(),
+                request.getAmount(),
+                request.getDescription(),
+                request.getCreateAt(),
+                targetAccount.getCurrency());
+
+        accountService.applyDelta(sourceAccount, request.getAmount().negate());
+        accountService.applyDelta(targetAccount, request.getAmount());
+
+        Transaction savedSourceTransaction = transactionRepository.save(sourceTransaction);
+        transactionRepository.save(targetTransaction);
+
+        return transactionMapper.toResponse(savedSourceTransaction);
+    }
+
+    private Transaction buildTransferTransaction(
+            UUID userId,
+            UUID accountId,
+            BigDecimal amount,
+            String description,
+            java.time.OffsetDateTime createdAt,
+            int currency) {
+        Transaction transaction = new Transaction();
+        transaction.setUserId(userId);
+        transaction.setAccountId(accountId);
+        transaction.setAmount(amount);
+        transaction.setType(TransactionType.TRANSFER);
+        transaction.setCategory(Category.TRANSFER);
+        transaction.setCurrency(currency);
+        transaction.setDescription(description);
+        transaction.setCreatedAt(createdAt != null ? createdAt.toLocalDateTime() : null);
+        return transaction;
     }
 
     public PageResponse<TransactionResponse> filterTransactions(Auth auth, TransactionFilterRequest filter) {
