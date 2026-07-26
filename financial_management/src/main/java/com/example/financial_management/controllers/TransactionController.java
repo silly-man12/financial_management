@@ -117,10 +117,11 @@ public class TransactionController {
 
         // Chuyển tiền giữa các tài khoản
         @PostMapping("/transfer")
-        public ResponseEntity<AbstractResponse<TransactionResponse>> transfer(@RequestBody TransferRequest request,
+        public ResponseEntity<AbstractResponse<TransactionResponse>> createTransfer(
+                        @RequestBody TransferRequest request,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<TransactionResponse>()
-                                .withData(() -> transactionService.transfer(request, auth));
+                                .withData(() -> transactionService.createTransfer(request, auth));
         }
 
 }
