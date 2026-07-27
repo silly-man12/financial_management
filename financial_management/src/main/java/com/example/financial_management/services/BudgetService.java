@@ -56,6 +56,10 @@ public class BudgetService {
             BigDecimal spending = transactionRepository.sumSpendingByCategoryAndMonth(
                     user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
 
+            if (spending == null) {
+                spending = BigDecimal.ZERO;
+            }
+
             response.setSpending(spending);
 
             BigDecimal overSpending = budget.getAmount().subtract(spending);

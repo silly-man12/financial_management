@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 public class BudgetController {
     private final BudgetService budgetService;
 
+    // Tính năng lấy danh sách ngân sách của người dùng
     @GetMapping("/all")
     public ResponseEntity<AbstractResponse<List<BudgetResponse>>> getBudgets(
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
@@ -38,6 +39,8 @@ public class BudgetController {
                 .withData(() -> budgetService.getBudgets(auth));
     }
 
+    // Tinh năng kiểm tra ngân sách, hiển thị số tiền đã chi tiêu và số tiền còn lại
+    // trong ngân sách
     @GetMapping("/checking")
     public ResponseEntity<AbstractResponse<List<BudgetCheckingResponse>>> checkingBudget(
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
@@ -46,6 +49,7 @@ public class BudgetController {
         });
     }
 
+    // Tính năng lấy thông tin ngân sách theo ID
     @GetMapping("/{id}")
     public ResponseEntity<AbstractResponse<BudgetResponse>> getBudgetById(@RequestParam UUID id,
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
@@ -53,6 +57,7 @@ public class BudgetController {
                 .withData(() -> budgetService.getBudgetById(id, auth));
     }
 
+    // Tính năng tạo ngân sách mới
     @PostMapping("/create")
     public ResponseEntity<AbstractResponse<BudgetResponse>> createBudget(@RequestBody BudgetRequest request,
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
@@ -60,6 +65,7 @@ public class BudgetController {
                 .withData(() -> budgetService.createBudget(request, auth));
     }
 
+    // Cập nhật ngân sách theo ID
     @PostMapping("/update")
     public ResponseEntity<AbstractResponse<BudgetResponse>> updateBudget(@RequestParam UUID budgetId,
             @RequestBody BudgetRequest request,
@@ -68,6 +74,7 @@ public class BudgetController {
                 .withData(() -> budgetService.updateBudget(budgetId, request, auth));
     }
 
+    // Xóa ngân sách theo ID
     @PostMapping("/delete")
     public ResponseEntity<AbstractResponse<String>> deleteBudget(@RequestParam UUID budgetId,
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
