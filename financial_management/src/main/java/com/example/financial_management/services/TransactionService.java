@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -211,6 +212,7 @@ public class TransactionService {
                 user.getId(),
                 sourceAccount.getId(),
                 request.getAmount(),
+                TransactionType.EXPENSE,
                 request.getDescription(),
                 request.getCreateAt(),
                 sourceAccount.getCurrency());
@@ -219,6 +221,7 @@ public class TransactionService {
                 user.getId(),
                 targetAccount.getId(),
                 request.getAmount(),
+                TransactionType.INCOME,
                 request.getDescription(),
                 request.getCreateAt(),
                 targetAccount.getCurrency());
@@ -236,14 +239,15 @@ public class TransactionService {
             UUID userId,
             UUID accountId,
             BigDecimal amount,
+            Integer transactionType,
             String description,
-            java.time.OffsetDateTime createdAt,
+            OffsetDateTime createdAt,
             int currency) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setAccountId(accountId);
         transaction.setAmount(amount);
-        transaction.setType(TransactionType.TRANSFER);
+        transaction.setType(transactionType);
         transaction.setCategory(Category.TRANSFER);
         transaction.setCurrency(currency);
         transaction.setDescription(description);
