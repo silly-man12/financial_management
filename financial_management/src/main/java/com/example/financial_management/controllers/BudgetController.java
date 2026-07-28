@@ -43,10 +43,12 @@ public class BudgetController {
     // trong ngân sách
     @GetMapping("/checking")
     public ResponseEntity<AbstractResponse<List<BudgetCheckingResponse>>> checkingBudget(
+            @RequestParam int month,
+            @RequestParam int year,
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
-        return new AbstractResponse<List<BudgetCheckingResponse>>().withData(() -> {
-            return budgetService.checkingBudget(auth);
-        });
+
+        return new AbstractResponse<List<BudgetCheckingResponse>>()
+                .withData(() -> budgetService.checkingBudget(month, year, auth));
     }
 
     // Tính năng lấy thông tin ngân sách theo ID
