@@ -21,6 +21,7 @@ import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -53,7 +54,7 @@ public class BudgetController {
 
     // Tính năng lấy thông tin ngân sách theo ID
     @GetMapping("/{id}")
-    public ResponseEntity<AbstractResponse<BudgetResponse>> getBudgetById(@RequestParam UUID id,
+    public ResponseEntity<AbstractResponse<BudgetResponse>> getBudgetById(@PathVariable UUID id,
             @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
         return new AbstractResponse<BudgetResponse>()
                 .withData(() -> budgetService.getBudgetById(id, auth));
