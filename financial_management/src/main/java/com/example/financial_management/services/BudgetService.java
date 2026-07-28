@@ -39,12 +39,15 @@ public class BudgetService {
         return budgets.stream().map(budgetMapper::toResponse).toList();
     }
 
-    public List<BudgetCheckingResponse> checkingBudget(Auth auth) {
+    public List<BudgetCheckingResponse> checkingBudget(int month, int year, Auth auth) {
         User user = validateUser(auth);
-        List<Budget> budgets = budgetRepository.findAllByUserId(user.getId());
+        List<Budget> budgets = budgetRepository.findAllByUserIdAndMonthAndYear(
+                user.getId(),
+                month,
+                year);
         List<BudgetCheckingResponse> responses = new ArrayList<>();
         for (Budget budget : budgets) {
-            if (budget.getCategory() < 0 && budget.getCategory() > 10) {
+            if (budget.getCategory() < 0 || budget.getCategory() > 10) {
                 log.warn("Invalid category {} for budget {}", budget.getCategory(), budget.getId());
                 continue;
             }
