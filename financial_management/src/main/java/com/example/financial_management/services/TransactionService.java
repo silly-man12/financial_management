@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -64,6 +65,30 @@ public class TransactionService {
                 pageResult.getTotalPages());
 
         return response;
+    }
+
+    public List<TransactionResponse> getByCategoryAndMonth(int category, String monthYear, Auth auth) {
+        User user = getUser(auth);
+
+        String[] parts = monthYear.split("/");
+
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid monthYear format. Expected format: MM/yyyy");
+        }
+
+        int month = Integer.parseInt(parts[0]);
+        int year = Integer.parseInt(parts[1]);
+
+        return transactionRepository
+                .findAllByCategoryAndMonth(
+                        user.getId(),
+                        TransactionType.EXPENSE,
+                        category,
+                        month,
+                        year)
+                .stream()
+                .map(transactionMapper::toResponse)
+                .toList();
     }
 
     public TransactionResponse getById(UUID id, Auth auth) {

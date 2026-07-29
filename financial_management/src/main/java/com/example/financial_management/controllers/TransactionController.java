@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
@@ -73,6 +74,15 @@ public class TransactionController {
                 return new AbstractResponse<PageResponse<TransactionResponse>>()
                                 .withData(() -> transactionService.getTransactionByAccount(accountId,
                                                 auth, PageRequest.of(page - 1, size)));
+        }
+
+        @GetMapping("/by-category-and-month")
+        public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getByCategoryAndMonth(
+                        @RequestParam int category,
+                        @RequestParam String monthYear,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<List<TransactionResponse>>()
+                                .withData(() -> transactionService.getByCategoryAndMonth(category, monthYear, auth));
         }
 
         // Tạo giao dịch mới với khả năng upload file
