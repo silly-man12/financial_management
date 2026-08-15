@@ -50,7 +50,17 @@ public class TransactionService {
     @Value("${app.upload.dir}")
     private String uploadDir;
 
-    public PageResponse<TransactionResponse> getAllTransactions(Auth auth, Pageable pageable) {
+    public List<TransactionResponse> getAllTransactions(Auth auth) {
+        User user = getUser(auth);
+
+        return transactionRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
+                .stream()
+                .map(transactionMapper::toResponse)
+                .toList();
+    }
+
+    public PageResponse<TransactionResponse> getAllTransactionsWithPage(Auth auth, Pageable pageable) {
         User user = getUser(auth);
 
         Page<TransactionResponse> pageResult = transactionRepository

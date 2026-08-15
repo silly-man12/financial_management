@@ -52,15 +52,23 @@ public class TransactionController {
                                 .withData(() -> transactionService.getById(id, auth));
         }
 
-        // Lấy tất cả giao dịch với phân trang
+        // Lấy tất cả giao dịch
         @GetMapping("/all")
+        public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getAll(
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+
+                return new AbstractResponse<List<TransactionResponse>>()
+                                .withData(() -> transactionService.getAllTransactions(auth));
+        }
+
+        @GetMapping("/all-with-pages")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAll(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
                         @RequestParam(defaultValue = "1") int page,
                         @RequestParam(defaultValue = "20") int size) {
 
                 return new AbstractResponse<PageResponse<TransactionResponse>>()
-                                .withData(() -> transactionService.getAllTransactions(auth,
+                                .withData(() -> transactionService.getAllTransactionsWithPage(auth,
                                                 PageRequest.of(page - 1, size)));
         }
 
