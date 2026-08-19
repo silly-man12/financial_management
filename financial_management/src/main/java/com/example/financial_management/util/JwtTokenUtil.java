@@ -52,6 +52,29 @@ public class JwtTokenUtil {
                 .compact();
     }
 
+    // Tạo Reset Password Token (hạn 15 phút)
+    public String generateResetPasswordToken(String email) {
+        long resetExpirationMs = 15 * 60 * 1000L; // 15 phút
+        return Jwts.builder()
+                .setSubject(email)
+                .claim("type", "RESET_PASSWORD")
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + resetExpirationMs))
+                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // Kiểm tra Reset Token hợp lệ
+    public boolean validateResetPasswordToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            String type = claims.get("type", String.class);
+            return "RESET_PASSWORD".equals(type) && !claims.getExpiration().before(new Date());
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token);

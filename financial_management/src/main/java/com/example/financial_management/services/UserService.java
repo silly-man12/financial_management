@@ -5,7 +5,9 @@ import com.example.financial_management.model.auth.AuthAccount;
 import com.example.financial_management.model.user.ChangeNameRequest;
 import com.example.financial_management.model.user.ChangePasswordRequest;
 import com.example.financial_management.model.user.ChangeUserStatusRequest;
+import com.example.financial_management.model.user.ForgotPasswordRequest;
 import com.example.financial_management.model.user.LoginRequest;
+import com.example.financial_management.model.user.ResetPasswordRequest;
 import com.example.financial_management.model.user.UserResponse;
 import com.example.financial_management.model.user.UserSignUpRequest;
 import com.example.financial_management.entity.Account;
@@ -41,6 +43,9 @@ public class UserService {
     private final UserMapper userMapper;
     @Value("${email_admin}")
     private String emailAdmin;
+    @Value("${app.forgot-password-url}")
+    private String resetPasswordUrl;
+    private final EmailService emailService;
 
     public UserResponse signUp(UserSignUpRequest request) {
         validateSignUp(request);
@@ -133,6 +138,74 @@ public class UserService {
             User saved = userRepository.saveAndFlush(user);
             return userMapper.toResponse(saved);
         }
+    }
+
+    /**
+     * 1. API Quên mật khẩu: Tạo token và gửi email đặt lại mật khẩu
+     */
+    public void forgotPassword(ForgotPasswordRequest request) {
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không được để trống");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail().trim())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Không tìm thấy người dùng với email này"));
+
+        validateUser(user);
+
+        // Tạo reset token (15 phút)
+        String resetToken = jwtTokenUtil.generateResetPasswordToken(user.getEmail());
+
+        // Tạo đường link gửi kèm token về client
+        String resetLink = resetPasswordUrl + "?token=" + resetToken;
+
+        // Gửi email
+        emailService.sendResetPasswordEmail(user.getEmail(), user.getName(), resetLink);
+    }
+
+    /**
+     * 2. API Xác nhận token trước khi đưa đến trình duyệt Reset Password
+     */
+    public String verifyResetPasswordToken(String token) {
+        if (token == null || token.trim().isEmpty() || !jwtTokenUtil.validateResetPasswordToken(token)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        String email = jwtTokenUtil.extractEmail(token);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Người dùng không tồn tại"));
+
+        validateUser(user);
+
+        return email; // Trả về email để frontend hiển thị xác thực
+    }
+
+    /**
+     * 3. API Đặt lại mật khẩu mới
+     */
+    public UserResponse resetPassword(ResetPasswordRequest request) {
+        // Validate Token
+        if (request.getToken() == null || !jwtTokenUtil.validateResetPasswordToken(request.getToken())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        // Validate mật khẩu mới & xác nhận
+        validatePasswordAndConfirm(request.getNewPassword(), request.getConfirmPassword());
+
+        String email = jwtTokenUtil.extractEmail(request.getToken());
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Người dùng không tồn tại"));
+
+        validateUser(user);
+
+        // Cập nhật mật khẩu mới
+        Map<String, String> hashAndSalt = generateHashAndSalt(request.getNewPassword());
+        user.setPasswordSalt(hashAndSalt.get("salt"));
+        user.setPasswordHash(hashAndSalt.get("hash"));
+
+        User saved = userRepository.saveAndFlush(user);
+        return userMapper.toResponse(saved);
     }
 
     private void validateAdmin(Auth auth) {
