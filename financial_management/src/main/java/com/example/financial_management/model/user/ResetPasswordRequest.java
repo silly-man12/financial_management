@@ -1,13 +1,13 @@
 package com.example.financial_management.model.user;
 
-import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
 
 @Data
-public class ChangePasswordRequest {
+public class ResetPasswordRequest {
 
-    @NotBlank(message = "Mật khẩu cũ không được để trống")
-    private String oldPassword;
+    @NotBlank(message = "Token không được để trống")
+    private String token;
 
     @NotBlank(message = "Mật khẩu mới không được để trống")
     private String newPassword;

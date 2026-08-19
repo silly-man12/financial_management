@@ -35,6 +35,9 @@ public class SecurityConfig {
             "/actuator/**",
             "/auth/signup",
             "/auth/login",
+            "/auth/forgot-password",
+            "/auth/verify-reset-token",
+            "/auth/reset-password",
             "/images/**");
 
     @Bean
