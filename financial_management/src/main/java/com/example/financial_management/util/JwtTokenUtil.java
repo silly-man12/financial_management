@@ -123,7 +123,7 @@ public class JwtTokenUtil {
 
     // Lấy email
     public String extractEmail(String token) {
-        return extractAllClaims(token).get("email", String.class);
+        return extractAllClaims(token).getSubject();
     }
 
     private Claims extractAllClaims(String token) {

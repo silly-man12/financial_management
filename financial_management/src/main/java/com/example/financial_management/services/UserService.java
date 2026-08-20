@@ -43,8 +43,8 @@ public class UserService {
     private final UserMapper userMapper;
     @Value("${email_admin}")
     private String emailAdmin;
-    @Value("${app.forgot-password-url}")
-    private String resetPasswordUrl;
+    @Value("${app.verify-reset-password-url}")
+    private String verifyResetPasswordUrl;
     private final EmailService emailService;
 
     public UserResponse signUp(UserSignUpRequest request) {
@@ -158,7 +158,7 @@ public class UserService {
         String resetToken = jwtTokenUtil.generateResetPasswordToken(user.getEmail());
 
         // Tạo đường link gửi kèm token về client
-        String resetLink = resetPasswordUrl + "?token=" + resetToken;
+        String resetLink = verifyResetPasswordUrl + "?token=" + resetToken;
 
         // Gửi email
         emailService.sendResetPasswordEmail(user.getEmail(), user.getName(), resetLink);
