@@ -170,6 +170,11 @@ public class AccountService {
         return accountMapper.toResponse(account);
     }
 
+    public Account getAccountById(UUID accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+    }
+
     public List<AccountResponse> getAllAccounts(Auth auth) {
         User user = validateUser(auth);
         List<Account> accounts = accountRepository.findAllByUserId(user.getId());
