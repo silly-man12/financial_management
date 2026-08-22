@@ -27,8 +27,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -47,6 +49,7 @@ public class TransactionService {
     private final TransactionMapper transactionMapper;
     private final UserRepository userRepository;
     private final AccountService accountService;
+
     @Value("${app.upload.dir}")
     private String uploadDir;
 
@@ -67,45 +70,46 @@ public class TransactionService {
                 .findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
                 .map(transactionMapper::toResponse);
 
-        PageResponse<TransactionResponse> response = new PageResponse<>(
+        return new PageResponse<>(
                 pageResult.getContent(),
-                pageResult.getNumber() + 1, // cộng 1 vì Page mặc định bắt đầu từ 0
+                pageResult.getNumber() + 1,
                 pageResult.getSize(),
                 pageResult.getTotalElements(),
                 pageResult.getTotalPages());
-
-        return response;
     }
 
     public List<TransactionResponse> getByCategoryAndMonth(int category, String monthYear, Auth auth) {
         User user = getUser(auth);
 
         String[] parts = monthYear.split("/");
-
         if (parts.length != 2) {
-            throw new IllegalArgumentException("Invalid monthYear format. Expected format: MM/yyyy");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid monthYear format. Expected format: MM/yyyy");
         }
 
-        int month = Integer.parseInt(parts[0]);
-        int year = Integer.parseInt(parts[1]);
+        try {
+            int month = Integer.parseInt(parts[0]);
+            int year = Integer.parseInt(parts[1]);
 
-        return transactionRepository
-                .findAllByCategoryAndMonth(
-                        user.getId(),
-                        TransactionType.EXPENSE,
-                        category,
-                        month,
-                        year)
-                .stream()
-                .map(transactionMapper::toResponse)
-                .toList();
+            return transactionRepository
+                    .findAllByCategoryAndMonth(
+                            user.getId(),
+                            TransactionType.EXPENSE,
+                            category,
+                            month,
+                            year)
+                    .stream()
+                    .map(transactionMapper::toResponse)
+                    .toList();
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Month and Year must be numbers");
+        }
     }
 
     public TransactionResponse getById(UUID id, Auth auth) {
         User user = getUser(auth);
         return transactionRepository.findByIdAndUserId(id, user.getId())
                 .map(transactionMapper::toResponse)
-                .orElse(null);
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
     public PageResponse<TransactionResponse> getTransactionByAccount(UUID accountId, Auth auth, Pageable pageable) {
@@ -115,14 +119,12 @@ public class TransactionService {
                 .findByAccountIdAndUserId(account.getId(), user.getId(), pageable)
                 .map(transactionMapper::toResponse);
 
-        PageResponse<TransactionResponse> response = new PageResponse<>(
+        return new PageResponse<>(
                 pageResult.getContent(),
-                pageResult.getNumber() + 1, // cộng 1 vì Page mặc định bắt đầu từ 0
+                pageResult.getNumber() + 1,
                 pageResult.getSize(),
                 pageResult.getTotalElements(),
                 pageResult.getTotalPages());
-
-        return response;
     }
 
     @Transactional
@@ -156,8 +158,11 @@ public class TransactionService {
     @Transactional
     public TransactionUpdateResponse updateTransaction(TransactionRequest updated, Auth auth, UUID transactionId,
             MultipartFile file) {
-        Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new RuntimeException("Transaction not found or access denied"));
+        User user = getUser(auth);
+
+        // Bảo mật: Kiểm tra cả transactionId và userId
+        Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
         Account oldAccount = accountService.validateAccount(
                 transaction.getAccountId(),
@@ -183,8 +188,11 @@ public class TransactionService {
         transaction.setDescription(updated.getDescription());
         transaction.setType(updated.getType());
         transaction.setAccountId(updated.getAccountId());
-        transaction.setUserId(UUID.fromString(auth.getId()));
-        transaction.setCreatedAt(updated.getCreateAt().toLocalDateTime());
+        
+        // Tránh NullPointerException nếu createAt không được gửi lên
+        if (updated.getCreateAt() != null) {
+            transaction.setCreatedAt(updated.getCreateAt().toLocalDateTime());
+        }
 
         validateCurrency(updated.getCurrency(), newAccount);
         validateCategory(updated.getType(), updated.getCategory());
@@ -203,7 +211,7 @@ public class TransactionService {
         User user = getUser(auth);
 
         Transaction transaction = transactionRepository.findByIdAndUserId(id, user.getId())
-                .orElseThrow(() -> new RuntimeException("Transaction not found or access denied"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
         Account account = accountService.validateAccount(transaction.getAccountId(), auth, Status.ACTIVE);
 
@@ -215,6 +223,11 @@ public class TransactionService {
         // Rollback balance (ngược lại delta cũ)
         accountService.applyDelta(account, oldDelta.negate());
 
+        // Xóa file ảnh vật lý trên ổ cứng nếu có
+        if (transaction.getImagePath() != null) {
+            deleteImage(transaction.getImagePath());
+        }
+
         // Xoá transaction
         transactionRepository.delete(transaction);
         return true;
@@ -225,22 +238,22 @@ public class TransactionService {
         User user = getUser(auth);
 
         if (request.getAccountId() == null || request.getTargetAccountId() == null) {
-            throw new RuntimeException("Source and target account IDs are required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target account IDs are required");
         }
 
         if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Transfer amount must be greater than zero");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfer amount must be greater than zero");
         }
 
         if (request.getAccountId().equals(request.getTargetAccountId())) {
-            throw new RuntimeException("Source and target accounts must be different");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must be different");
         }
 
         Account sourceAccount = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
         Account targetAccount = accountService.validateAccount(request.getTargetAccountId(), auth, Status.ACTIVE);
 
         if (sourceAccount.getCurrency() != targetAccount.getCurrency()) {
-            throw new RuntimeException("Source and target accounts must have the same currency");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must have the same currency");
         }
 
         Transaction sourceTransaction = buildTransferTransaction(
@@ -304,43 +317,40 @@ public class TransactionService {
                         filter),
                 pageable);
 
-        PageResponse<TransactionResponse> response = new PageResponse<>(
+        return new PageResponse<>(
                 result.getContent().stream().map(transactionMapper::toResponse).toList(),
                 result.getNumber() + 1,
                 result.getSize(),
                 result.getTotalElements(),
                 result.getTotalPages());
-
-        return response;
     }
 
     private User getUser(Auth auth) {
         return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
     private void validateCurrency(int currency, Account account) {
         if (currency != account.getCurrency()) {
-            throw new RuntimeException("Transaction currency does not match account currency");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transaction currency does not match account currency");
         }
     }
 
     private void validateCategory(int type, int category) {
-
         if (type == TransactionType.EXPENSE) {
             if (category < Category.FOOD || category > Category.OTHER_EXPENSE) {
-                throw new RuntimeException("Invalid category for EXPENSE transaction");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid category for EXPENSE transaction");
             }
         } else if (type == TransactionType.INCOME) {
             if (category < Category.SALARY || category > Category.OTHER_INCOME) {
-                throw new RuntimeException("Invalid category for INCOME transaction");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid category for INCOME transaction");
             }
         } else if (type == TransactionType.TRANSFER) {
             if (category != Category.TRANSFER) {
-                throw new RuntimeException("Invalid category for TRANSFER transaction");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid category for TRANSFER transaction");
             }
         } else {
-            throw new RuntimeException("Unknown transaction type: " + type);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown transaction type: " + type);
         }
     }
 
@@ -351,12 +361,11 @@ public class TransactionService {
 
         // Người dùng bỏ ảnh
         if (!haveImage) {
-
             if (transaction.getImagePath() != null) {
                 deleteImage(transaction.getImagePath());
             }
-
             transaction.setImagePath(null);
+            transaction.setHaveImage(false);
             return;
         }
 
@@ -371,7 +380,6 @@ public class TransactionService {
         }
 
         String newPath = saveImage(file);
-
         transaction.setHaveImage(true);
         transaction.setImagePath(newPath);
     }
@@ -384,11 +392,9 @@ public class TransactionService {
         try {
             Path filePath = Paths.get(uploadDir)
                     .resolve(Paths.get(imagePath).getFileName());
-
             Files.deleteIfExists(filePath);
-
         } catch (IOException e) {
-            throw new RuntimeException("Xóa ảnh thất bại", e);
+            log.error("Xóa ảnh thất bại: {}", imagePath, e);
         }
     }
 
@@ -400,14 +406,13 @@ public class TransactionService {
             Files.createDirectories(uploadPath);
 
             Path filePath = uploadPath.resolve(fileName);
-
             Files.write(filePath, file.getBytes());
 
             // Chỉ lưu đường dẫn public
             return "images/" + fileName;
-
         } catch (Exception e) {
-            throw new RuntimeException("Upload file thất bại", e);
+            log.error("Upload file thất bại", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Upload file thất bại");
         }
     }
 }
