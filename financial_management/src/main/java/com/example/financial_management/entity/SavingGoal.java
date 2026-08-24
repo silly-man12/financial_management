@@ -42,4 +42,5 @@ public class SavingGoal extends EntityBase {
 
     @Column(name = "status", nullable = false)
     private int status = SavingGoalStatus.IN_PROGRESS;
+
 }
