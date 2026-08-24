@@ -242,8 +242,8 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/recurring-transactions` | Lấy danh sách quy tắc định kỳ (lọc `status`) |
 | `GET` | `/recurring-transactions/{id}` | Xem chi tiết 1 quy tắc lặp lại |
 | `POST` | `/recurring-transactions` | Tạo mới giao dịch định kỳ |
-| `PUT` | `/recurring-transactions/{id}` | Cập nhật chu kỳ, ngày lặp, số tiền |
-| `PATCH`| `/recurring-transactions/{id}/status`| Bật (`ACTIVE = 1`) / Tạm dừng (`INACTIVE = 2`) |
+| `POST` | `/recurring-transactions/{id}` | Cập nhật chu kỳ, ngày lặp, số tiền |
+| `POST`| `/recurring-transactions/{id}/status`| Bật (`ACTIVE = 1`) / Tạm dừng (`INACTIVE = 2`) |
 | `POST` | `/recurring-transactions/{id}/execute-now`| Ghi nhận giao dịch ngay lập tức |
 | `DELETE`| `/recurring-transactions/{id}` | Xóa quy tắc định kỳ |
 
@@ -253,7 +253,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/saving-goals` | Lấy danh sách mục tiêu tiết kiệm |
 | `GET` | `/saving-goals/{id}` | Xem chi tiết mục tiêu & tiến độ `%` |
 | `POST` | `/saving-goals` | Tạo mục tiêu mới |
-| `POST` / `PUT`| `/saving-goals/{id}` | Cập nhật mục tiêu |
+| `POST` | `/saving-goals/{id}` | Cập nhật mục tiêu |
 | `POST` | `/saving-goals/{id}/deposit` | Nạp tiền vào quỹ (tự động đạt 100% khi đủ) |
 | `POST` | `/saving-goals/{id}/withdraw`| Rút tiền từ quỹ về tài khoản/ví |
 | `DELETE`| `/saving-goals/{id}` | Xóa mục tiêu |
@@ -264,7 +264,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/debts` | Lấy danh sách khoản nợ (lọc theo `type`: 1-Đi vay, 2-Cho vay và `status`) |
 | `GET` | `/debts/{id}` | Xem chi tiết 1 khoản nợ + lịch sử các lần trả |
 | `POST` | `/debts` | Tạo mới khoản nợ (tùy chọn trích/nhận tiền từ ví `accountId`) |
-| `POST` / `PUT`| `/debts/{id}` | Sửa thông tin khoản nợ (tên, sđt, ngày hẹn trả, ghi chú) |
+| `POST` | `/debts/{id}` | Sửa thông tin khoản nợ (tên, sđt, ngày hẹn trả, ghi chú) |
 | `POST` | `/debts/{id}/payments` | Ghi nhận 1 lần trả/thu nợ (tự động đổi `PAID` khi hết nợ) |
 | `DELETE`| `/debts/{id}/payments/{paymentId}` | Hủy 1 lần trả tiền (hoàn tác số dư nợ & ví) |
 | `DELETE`| `/debts/{id}` | Xóa khoản nợ và toàn bộ lịch sử thanh toán liên quan |
