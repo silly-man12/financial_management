@@ -74,8 +74,18 @@ public class DebtController {
                                 .withData(() -> debtService.update(id, request, auth));
         }
 
+        @PostMapping("/{id}/settle")
+        @Operation(summary = "Xóa nợ / Tất toán khoản nợ (đưa số nợ về 0, miễn nợ còn lại mà không xóa khoản nợ và không làm lệch số dư ví)")
+        public ResponseEntity<AbstractResponse<DebtResponse>> settle(
+                        @PathVariable UUID id,
+                        @RequestParam(value = "reason", required = false) String reason,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<DebtResponse>()
+                                .withData(() -> debtService.settle(id, reason, auth));
+        }
+
         @DeleteMapping("/{id}")
-        @Operation(summary = "Xóa khoản nợ")
+        @Operation(summary = "Xóa khoản nợ khỏi hệ thống (Chỉ được xóa khi khoản nợ ĐÃ ĐƯỢC XÓA NỢ / TẤT TOÁN trước đó)")
         public ResponseEntity<AbstractResponse<Boolean>> delete(
                         @PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {

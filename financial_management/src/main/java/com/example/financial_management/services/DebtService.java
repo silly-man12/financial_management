@@ -116,16 +116,16 @@ public class DebtService {
             Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
             if (request.getType() == DebtType.BORROW) {
-                // Đi vay -> Nhận tiền vào ví (tăng số dư)
+                // Đi vay -> Nhận tiền vào ví (tăng số dư) -> INCOME
                 accountService.applyDelta(account, request.getInitialAmount());
                 recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
-                        TransactionType.TRANSFER, account.getCurrency(),
+                        TransactionType.INCOME, account.getCurrency(),
                         "Đi vay từ: " + request.getPersonName());
             } else if (request.getType() == DebtType.LEND) {
-                // Cho vay -> Xuất tiền từ ví (giảm số dư)
+                // Cho vay -> Xuất tiền từ ví (giảm số dư) -> EXPENSE
                 accountService.applyDelta(account, request.getInitialAmount().negate());
                 recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
-                        TransactionType.TRANSFER, account.getCurrency(),
+                        TransactionType.EXPENSE, account.getCurrency(),
                         "Cho vay: " + request.getPersonName());
             }
         }
@@ -153,7 +153,12 @@ public class DebtService {
     }
 
     /**
-     * 5. Xóa khoản nợ (xóa cả lịch sử thanh toán và các transaction liên quan)
+     * 5. Xóa khoản nợ (Hard delete khỏi DB):
+     * Điều kiện:
+     * - Khoản nợ phải đã ở trạng thái PAID (đã trả xong hoặc đã xóa nợ).
+     * - Nếu khoản nợ được PAID do "xóa nợ / miễn nợ" (settle) -> KHÔNG CHO XÓA (cần
+     * giữ lại lịch sử truy vấn).
+     * - Chỉ cho xóa khi khoản nợ được PAID do người dùng tự thanh toán hết.
      */
     @Transactional
     public boolean delete(UUID id, Auth auth) {
@@ -162,25 +167,80 @@ public class DebtService {
         Debt debt = debtRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khoản nợ"));
 
-        // Lấy tất cả payments của debt này để dọn dẹp các transaction liên quan nếu có
-        List<DebtPayment> payments = debtPaymentRepository.findAllByDebtIdOrderByPaymentDateDesc(id);
-        for (DebtPayment payment : payments) {
-            if (payment.getTransactionId() != null) {
-                transactionRepository.deleteById(payment.getTransactionId());
-            }
+        // 1. Chưa tất toán -> Không cho xóa
+        if (debt.getStatus() != DebtStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Khoản nợ chưa được tất toán (còn nợ " + debt.getRemainingAmount() + " đ). "
+                            + "Vui lòng thanh toán hoặc thực hiện xóa nợ (settle) trước.");
         }
 
-        // Xóa toàn bộ lịch sử thanh toán của khoản nợ này
-        debtPaymentRepository.deleteAllByDebtId(id);
+        // 2. Đã tất toán nhưng do "xóa nợ / miễn nợ" -> Không cho xóa (giữ lại lịch sử)
+        String note = debt.getNote() != null ? debt.getNote() : "";
+        if (note.contains("[Đã xóa nợ")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Khoản nợ này đã được xóa nợ / miễn nợ trước đó. "
+                            + "Không thể xóa vĩnh viễn vì cần giữ lại lịch sử để truy vấn.");
+        }
 
-        // Xóa khoản nợ
+        // 3. Đã tất toán do tự thanh toán hết -> Cho phép xóa
+        debtPaymentRepository.deleteAllByDebtId(id);
         debtRepository.delete(debt);
+        log.info("Đã xóa vĩnh viễn khoản nợ id={} khỏi hệ thống (khoản nợ đã tự thanh toán xong)", id);
         return true;
     }
 
     /**
+     * 6. Xóa nợ / Tất toán khoản nợ (Settle / Forgive):
+     * Xóa nợ nhưng KHÔNG xóa khoản nợ khỏi DB:
+     * -> Đưa số nợ còn lại về 0 đ.
+     * -> Chuyển trạng thái sang PAID (2 - Đã trả xong).
+     * -> Tạo 1 bản ghi DebtPayment (accountId = null, không tạo Transaction) để lưu
+     * lịch sử miễn nợ.
+     * -> Giữ nguyên 100% số dư tài khoản ngân hàng và sao kê giao dịch.
+     */
+    @Transactional
+    public DebtResponse settle(UUID id, String reason, Auth auth) {
+        User user = getUser(auth);
+
+        Debt debt = debtRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khoản nợ"));
+
+        if (debt.getStatus() == DebtStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoản nợ này đã được tất toán trước đó");
+        }
+
+        BigDecimal remaining = debt.getRemainingAmount();
+
+        // 1. Tạo bản ghi lịch sử xóa nợ trong DebtPayment (accountId = null -> không
+        // tạo Transaction, không động tới ví)
+        DebtPayment settlePayment = new DebtPayment();
+        settlePayment.setDebtId(debt.getId());
+        settlePayment.setAmount(remaining);
+        settlePayment.setPaymentDate(LocalDate.now());
+        settlePayment.setAccountId(null);
+        settlePayment.setTransactionId(null);
+        settlePayment.setNote("Được xóa nợ / Miễn nợ" + (reason != null && !reason.isBlank() ? ": " + reason : ""));
+        debtPaymentRepository.save(settlePayment);
+
+        // 2. Cập nhật trạng thái khoản nợ
+        debt.setRemainingAmount(BigDecimal.ZERO);
+        debt.setStatus(DebtStatus.PAID);
+
+        String existingNote = debt.getNote() != null ? debt.getNote() : "";
+        String settleInfo = "[Đã xóa nợ / Miễn " + remaining + " đ còn lại"
+                + (reason != null && !reason.isBlank() ? ": " + reason : "") + "]";
+        debt.setNote((existingNote.isEmpty() ? "" : existingNote + " | ") + settleInfo);
+
+        debtRepository.saveAndFlush(debt);
+        log.info("Đã xóa nợ cho khoản nợ id={} (miễn {} đ, giữ nguyên số dư tài khoản)", id, remaining);
+
+        return getById(id, auth);
+    }
+
+    /**
      * 6. Ghi nhận 1 lần trả nợ (trả bớt / thu nợ)
-     * Backend tự trừ remainingAmount. Nếu còn <= 0 đ thì tự đổi status sang PAID (Đã tất toán).
+     * Backend tự trừ remainingAmount. Nếu còn <= 0 đ thì tự đổi status sang PAID
+     * (Đã tất toán).
      */
     @Transactional
     public DebtResponse addPayment(UUID id, DebtPaymentRequest request, Auth auth) {
@@ -208,17 +268,17 @@ public class DebtService {
             Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
             if (debt.getType() == DebtType.BORROW) {
-                // Mình đi vay -> Giờ trả bớt nợ -> Trừ tiền từ ví
+                // Mình đi vay -> Giờ trả bớt nợ -> Trừ tiền từ ví -> EXPENSE
                 accountService.applyDelta(account, request.getAmount().negate());
                 Transaction tx = recordDebtTransaction(user.getId(), account.getId(), request.getAmount(),
-                        TransactionType.TRANSFER, account.getCurrency(),
+                        TransactionType.EXPENSE, account.getCurrency(),
                         "Trả nợ cho: " + debt.getPersonName());
                 transactionId = tx.getId();
             } else if (debt.getType() == DebtType.LEND) {
-                // Mình cho vay -> Giờ thu bớt nợ -> Cộng tiền vào ví
+                // Mình cho vay -> Giờ thu bớt nợ -> Cộng tiền vào ví -> INCOME
                 accountService.applyDelta(account, request.getAmount());
                 Transaction tx = recordDebtTransaction(user.getId(), account.getId(), request.getAmount(),
-                        TransactionType.TRANSFER, account.getCurrency(),
+                        TransactionType.INCOME, account.getCurrency(),
                         "Thu nợ từ: " + debt.getPersonName());
                 transactionId = tx.getId();
             }
@@ -258,7 +318,8 @@ public class DebtService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khoản nợ"));
 
         DebtPayment payment = debtPaymentRepository.findByIdAndDebtId(paymentId, debtId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lần thanh toán này"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lần thanh toán này"));
 
         // 1. Hoàn tác số tiền nợ còn lại
         BigDecimal restoredRemaining = debt.getRemainingAmount().add(payment.getAmount());
@@ -304,7 +365,8 @@ public class DebtService {
 
         if (debt.getDueDate() != null && debt.getDueDate().isBefore(LocalDate.now())) {
             debt.setStatus(DebtStatus.OVERDUE);
-        } else if (debt.getStatus() == DebtStatus.OVERDUE && (debt.getDueDate() == null || !debt.getDueDate().isBefore(LocalDate.now()))) {
+        } else if (debt.getStatus() == DebtStatus.OVERDUE
+                && (debt.getDueDate() == null || !debt.getDueDate().isBefore(LocalDate.now()))) {
             debt.setStatus(DebtStatus.IN_PROGRESS);
         }
         return debt;
@@ -316,7 +378,8 @@ public class DebtService {
         }
 
         if (request.getType() == null || (request.getType() != DebtType.BORROW && request.getType() != DebtType.LEND)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loại khoản nợ không hợp lệ (1: Đi vay, 2: Cho vay)");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Loại khoản nợ không hợp lệ (1: Đi vay, 2: Cho vay)");
         }
 
         if (request.getStartDate() == null) {
@@ -328,13 +391,14 @@ public class DebtService {
         }
     }
 
-    private Transaction recordDebtTransaction(UUID userId, UUID accountId, BigDecimal amount, int type, int currency, String description) {
+    private Transaction recordDebtTransaction(UUID userId, UUID accountId, BigDecimal amount, int type, int currency,
+            String description) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setAccountId(accountId);
         transaction.setAmount(amount);
         transaction.setType(type);
-        transaction.setCategory(Category.TRANSFER);
+        transaction.setCategory(Category.DEBT);
         transaction.setCurrency(currency);
         transaction.setDescription(description);
         return transactionRepository.save(transaction);

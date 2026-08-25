@@ -23,6 +23,9 @@ public class Category {
     // Transfer Category
     public static final int TRANSFER = 16;
 
+    // Savings Category
+    public static final int SAVINGS = 17;
+
     private Category() {
         // Utility class
     }
@@ -61,6 +64,8 @@ public class Category {
                 return "Other Income";
             case TRANSFER:
                 return "Transfer";
+            case SAVINGS:
+                return "Savings";
             default:
                 return "Unknown";
         }
