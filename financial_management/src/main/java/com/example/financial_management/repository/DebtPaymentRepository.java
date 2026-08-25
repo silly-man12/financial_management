@@ -15,4 +15,6 @@ public interface DebtPaymentRepository extends JpaRepository<DebtPayment, UUID> 
     Optional<DebtPayment> findByIdAndDebtId(UUID id, UUID debtId);
 
     void deleteAllByDebtId(UUID debtId);
+
+    boolean existsByTransactionId(UUID transactionId);
 }

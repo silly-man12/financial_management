@@ -107,7 +107,7 @@ public class SavingGoalService {
             accountService.applyDelta(account, initialAmount.negate());
 
             // Lưu lịch sử biến động số dư tài khoản
-            saveSavingTransaction(user.getId(), account.getId(), initialAmount, account.getCurrency(),
+            saveSavingTransaction(user.getId(), account.getId(), initialAmount, TransactionType.EXPENSE, account.getCurrency(),
                     "Khởi tạo góp quỹ mục tiêu: " + saved.getName());
         }
 
@@ -161,7 +161,7 @@ public class SavingGoalService {
             accountService.applyDelta(account, request.getAmount().negate());
 
             // Lưu lịch sử biến động số dư tài khoản
-            saveSavingTransaction(user.getId(), account.getId(), request.getAmount(), account.getCurrency(),
+            saveSavingTransaction(user.getId(), account.getId(), request.getAmount(), TransactionType.EXPENSE, account.getCurrency(),
                     "Góp quỹ mục tiêu: " + savingGoal.getName());
         }
 
@@ -202,7 +202,7 @@ public class SavingGoalService {
             accountService.applyDelta(account, request.getAmount());
 
             // Lưu lịch sử biến động số dư tài khoản
-            saveSavingTransaction(user.getId(), account.getId(), request.getAmount(), account.getCurrency(),
+            saveSavingTransaction(user.getId(), account.getId(), request.getAmount(), TransactionType.INCOME, account.getCurrency(),
                     "Rút tiền từ mục tiêu: " + savingGoal.getName());
         }
 
@@ -235,13 +235,13 @@ public class SavingGoalService {
     /**
      * Helper lưu bản ghi Transaction chuyển tiền nội bộ phục vụ sao kê tài khoản
      */
-    private void saveSavingTransaction(UUID userId, UUID accountId, BigDecimal amount, int currency, String description) {
+    private void saveSavingTransaction(UUID userId, UUID accountId, BigDecimal amount, int type, int currency, String description) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setAccountId(accountId);
         transaction.setAmount(amount);
-        transaction.setType(TransactionType.TRANSFER);
-        transaction.setCategory(Category.TRANSFER);
+        transaction.setType(type);
+        transaction.setCategory(Category.SAVINGS);
         transaction.setCurrency(currency);
         transaction.setDescription(description);
         transactionRepository.save(transaction);
