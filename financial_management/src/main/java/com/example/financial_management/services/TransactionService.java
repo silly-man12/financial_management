@@ -16,6 +16,7 @@ import com.example.financial_management.model.transaction.TransactionSpecificati
 import com.example.financial_management.model.transaction.TransactionUpdateResponse;
 import com.example.financial_management.model.transaction.TransferRequest;
 import com.example.financial_management.repository.DebtPaymentRepository;
+import com.example.financial_management.repository.SavingGoalContributionRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
 
@@ -51,6 +52,7 @@ public class TransactionService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final DebtPaymentRepository debtPaymentRepository;
+    private final SavingGoalContributionRepository savingGoalContributionRepository;
 
     @Value("${app.upload.dir}")
     private String uploadDir;
@@ -166,10 +168,14 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
-        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Quản lý nợ
+        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
         if (debtPaymentRepository.existsByTransactionId(transactionId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để cập nhật hoặc hủy.");
+        }
+        if (savingGoalContributionRepository.existsByTransactionId(transactionId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Giao dịch này được tạo tự động từ Mục tiêu tiết kiệm. Vui lòng vào mục Tiết kiệm để chỉnh sửa hoặc hủy giao dịch.");
         }
 
         Account oldAccount = accountService.validateAccount(
@@ -221,10 +227,14 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
-        // Ràng buộc toàn vẹn: Không cho phép xóa trực tiếp giao dịch sinh ra từ Quản lý nợ
+        // Ràng buộc toàn vẹn: Không cho phép xóa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
         if (debtPaymentRepository.existsByTransactionId(transaction.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để hủy lần thanh toán này.");
+        }
+        if (savingGoalContributionRepository.existsByTransactionId(transaction.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Giao dịch này được tạo tự động từ Mục tiêu tiết kiệm. Vui lòng vào mục Tiết kiệm để hủy lần đóng góp này.");
         }
 
         Account account = accountService.validateAccount(transaction.getAccountId(), auth, Status.ACTIVE);

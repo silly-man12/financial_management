@@ -40,6 +40,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     boolean existsByAccountIdAndCurrencyNot(UUID accountId, int currency);
 
+    boolean existsByAccountId(UUID accountId);
+
     Page<Transaction> findByAccountIdAndUserId(UUID accountId, UUID userId, Pageable pageable);
 
     List<Transaction> findAllByAccountIdAndUserId(UUID accountId, UUID userId);

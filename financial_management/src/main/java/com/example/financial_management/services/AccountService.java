@@ -102,6 +102,12 @@ public class AccountService {
         Account account = accountRepository.findByIdAndUserId(accountId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
 
+        if (transactionRepository.existsByAccountId(accountId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Tài khoản này đã phát sinh giao dịch sao kê, không thể xóa vĩnh viễn. "
+                            + "Vui lòng chuyển trạng thái sang TẠM DỪNG (INACTIVE) để ẩn tài khoản mà vẫn bảo toàn lịch sử.");
+        }
+
         accountRepository.delete(account);
         return true;
     }

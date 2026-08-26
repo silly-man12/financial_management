@@ -163,18 +163,47 @@ public class RecurringTransactionService {
     }
 
     /**
-     * Thực thi ngay lập tức - "Ghi nhận ngay" mà không cần đợi đến chu kỳ tiếp theo
+     * Tự động quét và thực thi các giao dịch định kỳ đến hạn (dành cho Cronjob hàng ngày)
      */
     @Transactional
-    public void executeNow() {
-        List<RecurringTransaction> recurringTransactions = recurringTransactionRepository.findByStatus(Status.ACTIVE);
-        // Tạo transaction thực tế
-        for (RecurringTransaction recurring : recurringTransactions) {
-            createTransactionFromRecurring(recurring);
-            // Cập nhật nextExecutionDate
-            advanceNextExecutionDate(recurring);
-            recurringTransactionRepository.saveAndFlush(recurring);
+    public void executeAllDue() {
+        LocalDate today = LocalDate.now();
+        List<RecurringTransaction> dueList = recurringTransactionRepository
+                .findAllByStatusAndNextExecutionDateLessThanEqual(Status.ACTIVE, today);
+
+        log.info("Cronjob quét thấy {} giao dịch định kỳ đến hạn xử lý", dueList.size());
+        for (RecurringTransaction recurring : dueList) {
+            try {
+                createTransactionFromRecurring(recurring);
+                advanceNextExecutionDate(recurring);
+                recurringTransactionRepository.saveAndFlush(recurring);
+            } catch (Exception e) {
+                log.error("Lỗi khi tự động thực thi recurring transaction id={}", recurring.getId(), e);
+            }
         }
+    }
+
+    /**
+     * Thực thi ngay lập tức 1 quy tắc cụ thể theo yêu cầu của user ("Ghi nhận ngay")
+     */
+    @Transactional
+    public RecurringTransactionResponse executeNow(UUID id, Auth auth) {
+        User user = getUser(auth);
+
+        RecurringTransaction entity = recurringTransactionRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Không tìm thấy giao dịch định kỳ"));
+
+        if (entity.getStatus() != Status.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Giao dịch định kỳ đang tạm dừng hoặc không hoạt động");
+        }
+
+        createTransactionFromRecurring(entity);
+        advanceNextExecutionDate(entity);
+        RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
+
+        return recurringTransactionMapper.toResponse(saved);
     }
 
     // ========================= HELPER METHODS =========================
