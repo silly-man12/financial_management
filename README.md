@@ -10,7 +10,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - [🏗️ Cấu trúc dự án](#️-cấu-trúc-dự-án)
 - [⚙️ Cài đặt & Cấu hình](#️-cài-đặt--cấu-hình)
 - [🚀 Chạy ứng dụng](#-chạy-ứng-dụng)
-- [📚 Danh sách API](#-danh-sách-api)
+- [📚 Danh sách API chi tiết](#-danh-sách-api-chi-tiết)
 - [🔐 Bảo mật & Xác thực](#-bảo-mật--xác-thực)
 
 ---
@@ -21,42 +21,44 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Đăng ký / Đăng nhập**: Xác thực qua JWT Token, phân quyền `USER` và `ADMIN`.
 - **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt + Custom Salt.
 - **Quên / Đặt lại mật khẩu**: Gửi email chứa link xác thực token tạm thời (15 phút) qua Gmail SMTP.
-- **Quản trị viên (Admin)**: Xem danh sách người dùng, kích hoạt / khóa tài khoản (`ACTIVE` / `INACTIVE`).
+- **Quản trị viên (Admin)**: Xem danh sách người dùng, kích hoạt / khóa tài khoản (`ACTIVE = 1` / `INACTIVE = 2`).
 
 ### 2. 💳 Quản lý Tài khoản / Ví (Accounts)
-- Quản lý đa dạng các loại tài khoản: Ví tiền mặt (`CASH`), Ngân hàng (`BANK`), Thẻ tín dụng (`CREDIT_CARD`), Ví điện tử (`E_WALLET`), Tài khoản đầu tư (`INVESTMENT`), Sổ tiết kiệm (`SAVINGS`).
-- Theo dõi số dư tự động cập nhật theo từng giao dịch thu/chi/chuyển tiền.
+- Quản lý đa dạng các loại tài khoản: Ví tiền mặt (`CASH = 1`), Ngân hàng (`BANK = 2`), Thẻ tín dụng (`CREDIT_CARD = 3`), Ví điện tử (`E_WALLET = 4`), Tài khoản đầu tư (`INVESTMENT = 5`), Sổ tiết kiệm (`SAVINGS = 6`).
+- Theo dõi số dư tự động cập nhật theo từng giao dịch thu/chi/chuyển tiền/nạp rút quỹ.
+- Chặn xóa cứng tài khoản khi đã có giao dịch sao kê để bảo vệ lịch sử sổ sách.
 
 ### 3. 💸 Quản lý Giao dịch (Transactions)
-- **Thu / Chi / Chuyển khoản**: Ghi chép các khoản Thu (`INCOME`), Chi (`EXPENSE`), và Chuyển tiền giữa các tài khoản (`TRANSFER`).
-- **Phân loại danh mục (Category)**: Ăn uống, Di chuyển, Mua sắm, Hóa đơn, Tiền lương, Đầu tư...
-- **Đính kèm hóa đơn**: Hỗ trợ tải lên ảnh hóa đơn / chứng từ thanh toán (Multipart File Upload).
+- **Thu / Chi / Chuyển khoản**: Ghi chép các khoản Thu (`INCOME = 1`), Chi (`EXPENSE = 2`), và Chuyển tiền giữa các tài khoản (`TRANSFER = 3`).
+- **Phân loại danh mục (Category)**: Ăn uống (1), Di chuyển (2), Mua sắm (7), Hóa đơn (4), Tiền lương (11), Đầu tư (13)...
+- **Đính kèm hóa đơn**: Hỗ trợ tải lên ảnh hóa đơn / chứng từ thanh toán (`MultipartFile` qua `multipart/form-data`).
 - **Bộ lọc & Phân trang**: Tìm kiếm và lọc giao dịch theo ngày, danh mục, tài khoản, khoảng tiền với Spring JPA Specification.
+- **Ràng buộc toàn vẹn**: Chặn sửa/xóa trực tiếp các giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm.
 
 ### 4. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục theo tháng/năm.
-- API đối soát cảnh báo ngân sách: Tự động so sánh ngân sách đã đặt với số tiền thực chi để kiểm soát bội chi.
+- API đối soát ngân sách (`/budgets/checking`): Tự động so sánh ngân sách đã đặt với số tiền thực chi để kiểm soát bội chi.
 
 ### 5. 🔄 Giao dịch Định kỳ (Recurring Transactions)
-- Tự động hóa các khoản thu/chi lặp lại theo chu kỳ: Hàng ngày (`DAILY`), Hàng tuần (`WEEKLY`), Hàng tháng (`MONTHLY`), Hàng năm (`YEARLY`).
-- Tự động tính toán `nextExecutionDate` và hỗ trợ Cronjob tự động ghi nhận giao dịch vào ngày đến hạn.
-- Cho phép "Ghi nhận ngay" (`execute-now`) hoặc Bật / Tạm dừng quy tắc.
+- Tự động hóa các khoản thu/chi lặp lại theo chu kỳ: Hàng ngày (`DAILY = 1`), Hàng tuần (`WEEKLY = 2`), Hàng tháng (`MONTHLY = 3`), Hàng năm (`YEARLY = 4`).
+- Tự động tính toán `nextExecutionDate` và hỗ trợ Cronjob tự động quét mỗi ngày lúc `00:00:00` để ghi nhận giao dịch đến hạn.
+- Hỗ trợ "Ghi nhận ngay" (`POST /{id}/execute-now`) cho từng quy tắc hoặc Bật / Tạm dừng (`status`: `1: ACTIVE`, `2: INACTIVE`).
 
 ### 6. 🎯 Mục tiêu Tiết kiệm & Lịch sử Góp quỹ (Saving Goals & Contributions)
 - **Quản lý mục tiêu**: Khởi tạo các quỹ mục tiêu (Mua xe, Mua nhà, Du lịch, Quỹ khẩn cấp...).
 - **Lịch sử đóng góp chi tiết (`SavingGoalContribution`)**:
-  - Lưu vết toàn bộ từng lần nạp/góp tiền (`DEPOSIT`) và rút tiền (`WITHDRAW`).
+  - Lưu vết toàn bộ từng lần nạp/góp tiền (`DEPOSIT = 1`) và rút tiền (`WITHDRAW = 2`).
   - Ghi nhận ngày giao dịch, tài khoản nguồn/đích trích tiền, ghi chú và mã giao dịch sao kê liên kết.
   - Tự động ghi nhận đóng góp khi khởi tạo số dư ban đầu, khi nạp quỹ hoặc rút quỹ.
-- **Tiến độ tích lũy**: Theo dõi tiến độ tích lũy `%` tự động và chuyển trạng thái sang `COMPLETED` khi đạt $\ge 100\%$.
+- **Tiến độ tích lũy**: Theo dõi tiến độ tích lũy `%` tự động và chuyển trạng thái sang `COMPLETED = 2` khi đạt $\ge 100\%$.
 - **Hoàn tác linh hoạt**: Cho phép hủy 1 lần đóng góp, tự động hoàn tác số dư mục tiêu và số dư tài khoản ví liên quan.
 
 ### 7. 🤝 Quản lý Nợ - Sổ nợ (Debt Management)
-- Theo dõi các khoản **Đi vay (`BORROW` - Nợ phải trả)** và **Cho vay (`LEND` - Nợ phải thu)**.
+- Theo dõi các khoản **Đi vay (`BORROW = 1` - Nợ phải trả)** và **Cho vay (`LEND = 2` - Nợ phải thu)**.
 - Ghi nhận lịch sử từng lần trả bớt / thu nợ (`DebtPayment`), tự động trừ số nợ còn lại (`remainingAmount`).
-- **Tự động tất toán**: Chuyển trạng thái sang `PAID` khi số nợ còn lại $= 0$.
-- **Cảnh báo quá hạn**: Tự động chuyển trạng thái `OVERDUE` khi vượt quá hạn hẹn trả (`dueDate`).
-- Đồng bộ biến động số dư tài khoản ví/ngân hàng khi vay, cho vay, trả nợ và thu nợ.
+- **Tất toán / Miễn nợ (`settle`)**: Cho phép xóa nợ / miễn nợ mà không làm lệch số dư ví.
+- **Tự động tất toán**: Chuyển trạng thái sang `PAID = 2` khi số nợ còn lại $= 0$.
+- **Cảnh báo quá hạn**: Tự động chuyển trạng thái `OVERDUE = 3` khi vượt quá hạn hẹn trả (`dueDate`).
 
 ### 8. 📈 Báo cáo & Thống kê (Reports & Statistics)
 - **Tổng quan tài chính**: Báo cáo tổng thu, tổng chi, số dư ròng theo ngày/tháng/khoảng thời gian.
@@ -92,7 +94,7 @@ financial_management/
 │   ├── config/             # Cấu hình Security, JWT AuthFilter, Swagger, Web CORS
 │   ├── constant/           # Hằng số: Category, TransactionType, SavingContributionType, DebtType, Status...
 │   ├── controllers/        # REST Controllers (Auth, User, Account, Transaction, Budget, SavingGoal, Debt, Report...)
-│   ├── cronjob/            # Tác vụ định kỳ tự động (RecurringTransactionCronjob)
+│   ├── cronjob/            # Tác vụ định kỳ tự động chạy 00:00:00 hàng ngày (RecurringTransactionCronjob)
 │   ├── entity/             # JPA Entities (User, Account, Transaction, Budget, SavingGoal, SavingGoalContribution, Debt...)
 │   │   └── base/           # EntityBase (UUID), AuditEntity (createdAt, updatedAt...)
 │   ├── exception/          # Custom Deserializer & Global Exception Handlers
@@ -175,7 +177,7 @@ Sau khi ứng dụng khởi động thành công:
 
 ---
 
-## 📚 Danh sách API
+## 📚 Danh sách API chi tiết
 
 Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 ```json
@@ -194,7 +196,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `POST` | `/auth/signup` | Đăng ký tài khoản mới | Public |
 | `POST` | `/auth/login` | Đăng nhập nhận JWT Token | Public |
 | `POST` | `/auth/forgot-password` | Gửi email yêu cầu đặt lại mật khẩu | Public |
-| `GET` | `/auth/verify-reset-token` | Xác thực token từ link email & chuyển hướng | Public |
+| `GET` | `/auth/verify-reset-token?token={token}` | Xác thực token từ link email | Public |
 | `POST` | `/auth/reset-password` | Đặt mật khẩu mới với token | Public |
 
 ### 2. User Management (`/users`)
@@ -213,41 +215,42 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/accounts/{id}` | Lấy chi tiết tài khoản |
 | `POST` | `/accounts/create` | Tạo mới tài khoản/ví |
 | `POST` | `/accounts/{id}` | Cập nhật thông tin tài khoản |
-| `POST` | `/accounts/{id}/status` | Đổi trạng thái tài khoản |
-| `DELETE`| `/accounts/{id}` | Xóa tài khoản |
+| `POST` | `/accounts/{id}/status?status={status}` | Đổi trạng thái tài khoản (`1: ACTIVE`, `2: INACTIVE`) |
+| `DELETE`| `/accounts/{id}` | Xóa tài khoản (chỉ xóa khi chưa có giao dịch) |
 
 ### 4. Transactions (`/transactions`)
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| `GET` | `/transactions/all` | Lấy toàn bộ lịch sử giao dịch |
-| `GET` | `/transactions/all-with-pages` | Lấy danh sách giao dịch có phân trang |
-| `GET` | `/transactions/{id}` | Xem chi tiết 1 giao dịch |
-| `GET` | `/transactions/{accountId}/all` | Lấy giao dịch theo từng tài khoản |
-| `POST` | `/transactions/create` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh) |
-| `POST` | `/transactions/{id}` | Cập nhật giao dịch (hỗ trợ đổi ảnh/số dư) |
-| `POST` | `/transactions/transfer` | Chuyển tiền giữa 2 tài khoản |
-| `POST` | `/transactions/filter` | Lọc giao dịch nâng cao đa tiêu chí |
-| `DELETE`| `/transactions/{id}` | Xóa giao dịch (tự động rollback số dư) |
+| Method | Endpoint | Content-Type | Mô tả |
+|---|---|---|---|
+| `GET` | `/transactions/all` | - | Lấy toàn bộ lịch sử giao dịch |
+| `GET` | `/transactions/all-with-pages?page=1&size=20` | - | Lấy danh sách giao dịch có phân trang |
+| `GET` | `/transactions/{id}` | - | Xem chi tiết 1 giao dịch |
+| `GET` | `/transactions/{accountId}/all?page=1&size=20` | - | Lấy giao dịch theo từng tài khoản |
+| `GET` | `/transactions/by-category-and-month?category={c}&monthYear=MM/yyyy` | - | Lọc chi tiêu theo danh mục và tháng |
+| `POST` | `/transactions/create` | `multipart/form-data` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh `file`) |
+| `POST` | `/transactions/{id}` | `multipart/form-data` | Cập nhật giao dịch (hỗ trợ đổi ảnh/số dư) |
+| `POST` | `/transactions/transfer` | `application/json` | Chuyển tiền giữa 2 tài khoản |
+| `POST` | `/transactions/filter` | `application/json` | Lọc giao dịch nâng cao đa tiêu chí có phân trang |
+| `DELETE`| `/transactions/{id}` | - | Xóa giao dịch (tự động rollback số dư) |
 
 ### 5. Budgets (`/budgets`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/budgets/all` | Lấy danh sách ngân sách |
+| `GET` | `/budgets/all` | Lấy danh sách tất cả ngân sách |
 | `GET` | `/budgets/{id}` | Lấy chi tiết 1 ngân sách |
+| `GET` | `/budgets/checking?month={month}&year={year}` | Kiểm tra tình hình chi tiêu so với ngân sách |
 | `POST` | `/budgets/create` | Thiết lập ngân sách mới |
-| `POST` | `/budgets/{id}` | Cập nhật ngân sách |
-| `POST` | `/budgets/checking` | Kiểm tra tình hình chi tiêu so với ngân sách |
-| `DELETE`| `/budgets/{id}` | Xóa ngân sách |
+| `POST` | `/budgets/update?budgetId={budgetId}` | Cập nhật ngân sách |
+| `POST` | `/budgets/delete?budgetId={budgetId}` | Xóa ngân sách |
 
 ### 6. Recurring Transactions (`/recurring-transactions`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/recurring-transactions` | Lấy danh sách quy tắc định kỳ (lọc `status`) |
+| `GET` | `/recurring-transactions` | Lấy danh sách quy tắc định kỳ (lọc theo `status`) |
 | `GET` | `/recurring-transactions/{id}` | Xem chi tiết 1 quy tắc lặp lại |
 | `POST` | `/recurring-transactions` | Tạo mới giao dịch định kỳ |
 | `POST` | `/recurring-transactions/{id}` | Cập nhật chu kỳ, ngày lặp, số tiền |
-| `POST`| `/recurring-transactions/{id}/status`| Bật (`ACTIVE = 1`) / Tạm dừng (`INACTIVE = 2`) |
-| `POST` | `/recurring-transactions/{id}/execute-now`| Ghi nhận giao dịch ngay lập tức |
+| `POST`| `/recurring-transactions/{id}/status?status={1\|2}`| Bật (`ACTIVE = 1`) / Tạm dừng (`INACTIVE = 2`) |
+| `POST` | `/recurring-transactions/{id}/execute-now`| Ghi nhận giao dịch ngay lập tức theo quy tắc này |
 | `DELETE`| `/recurring-transactions/{id}` | Xóa quy tắc định kỳ |
 
 ### 7. Saving Goals & Contributions (`/saving-goals`)
@@ -271,17 +274,17 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/debts/{id}` | Xem chi tiết 1 khoản nợ + lịch sử các lần trả (`payments`) |
 | `POST` | `/debts` | Tạo mới khoản nợ (tùy chọn trích/nhận tiền từ ví `accountId`) |
 | `POST` | `/debts/{id}` | Sửa thông tin khoản nợ (tên, sđt, ngày hẹn trả, ghi chú) |
-| `POST` | `/debts/{id}/settle` | Tất toán / Miễn nợ khoản nợ |
+| `POST` | `/debts/{id}/settle?reason={reason}` | Tất toán / Miễn nợ khoản nợ |
 | `POST` | `/debts/{id}/payments` | Ghi nhận 1 lần trả/thu nợ (tự động đổi `PAID` khi hết nợ) |
 | `DELETE`| `/debts/{id}/payments/{paymentId}` | Hủy 1 lần trả tiền (hoàn tác số dư nợ & ví) |
-| `DELETE`| `/debts/{id}` | Xóa khoản nợ khỏi hệ thống |
+| `DELETE`| `/debts/{id}` | Xóa khoản nợ khỏi hệ thống (chỉ xóa khi đã thanh toán hết) |
 
 ### 9. Reports & Analytics (`/reports`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/reports/chart` | Lấy dữ liệu biểu đồ theo khoảng ngày |
+| `GET` | `/reports/chart?startDate={yyMMdd}&endDate={yyMMdd}` | Lấy dữ liệu biểu đồ theo khoảng ngày |
 | `GET` | `/reports/account/{accountId}` | Thống kê số dư đầu kỳ, cuối kỳ của tài khoản |
-| `GET` | `/reports/distribution/{accountId}` | Phân bổ thu chi theo danh mục |
+| `GET` | `/reports/distribution/{accountId}` | Phân bổ thu chi theo danh mục của tài khoản |
 | `POST` | `/reports/summary` | Tổng kết tổng thu, tổng chi, số dư ròng |
 | `POST` | `/reports/daily` | Báo cáo chi tiết thu chi từng ngày trong tháng |
 | `POST` | `/reports/monthly` | Báo cáo thu chi 12 tháng trong năm |
