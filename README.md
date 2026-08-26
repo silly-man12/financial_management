@@ -1,6 +1,6 @@
 # 💰 Financial Management System (Hệ thống Quản lý Tài chính Cá nhân)
 
-Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java 21**, cung cấp trọn bộ RESTful API cho ứng dụng quản lý tài chính cá nhân, theo dõi chi tiêu, ngân sách, mục tiêu tiết kiệm và phân tích báo cáo tài chính chuyên sâu.
+Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java 21**, cung cấp trọn bộ RESTful API cho ứng dụng quản lý tài chính cá nhân, theo dõi chi tiêu, ngân sách, mục tiêu tiết kiệm, quản lý sổ nợ và phân tích báo cáo tài chính chuyên sâu.
 
 ---
 
@@ -42,11 +42,14 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - Tự động tính toán `nextExecutionDate` và hỗ trợ Cronjob tự động ghi nhận giao dịch vào ngày đến hạn.
 - Cho phép "Ghi nhận ngay" (`execute-now`) hoặc Bật / Tạm dừng quy tắc.
 
-### 6. 🎯 Mục tiêu Tiết kiệm (Saving Goals)
-- Khởi tạo các quỹ mục tiêu (Mua xe, Du lịch, Quỹ khẩn cấp...).
-- **Nạp tiền / Góp quỹ (`deposit`)**: Tự động trích tiền từ tài khoản nguồn và ghi nhận sao kê nội bộ `TRANSFER`.
-- **Rút tiền (`withdraw`)**: Rút tiền từ quỹ tiết kiệm hoàn về tài khoản ví/ngân hàng.
-- Theo dõi tiến độ tích lũy `%` và tự động cập nhật trạng thái `COMPLETED` khi đạt $\ge 100\%$.
+### 6. 🎯 Mục tiêu Tiết kiệm & Lịch sử Góp quỹ (Saving Goals & Contributions)
+- **Quản lý mục tiêu**: Khởi tạo các quỹ mục tiêu (Mua xe, Mua nhà, Du lịch, Quỹ khẩn cấp...).
+- **Lịch sử đóng góp chi tiết (`SavingGoalContribution`)**:
+  - Lưu vết toàn bộ từng lần nạp/góp tiền (`DEPOSIT`) và rút tiền (`WITHDRAW`).
+  - Ghi nhận ngày giao dịch, tài khoản nguồn/đích trích tiền, ghi chú và mã giao dịch sao kê liên kết.
+  - Tự động ghi nhận đóng góp khi khởi tạo số dư ban đầu, khi nạp quỹ hoặc rút quỹ.
+- **Tiến độ tích lũy**: Theo dõi tiến độ tích lũy `%` tự động và chuyển trạng thái sang `COMPLETED` khi đạt $\ge 100\%$.
+- **Hoàn tác linh hoạt**: Cho phép hủy 1 lần đóng góp, tự động hoàn tác số dư mục tiêu và số dư tài khoản ví liên quan.
 
 ### 7. 🤝 Quản lý Nợ - Sổ nợ (Debt Management)
 - Theo dõi các khoản **Đi vay (`BORROW` - Nợ phải trả)** và **Cho vay (`LEND` - Nợ phải thu)**.
@@ -87,19 +90,19 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 financial_management/
 ├── src/main/java/com/example/financial_management/
 │   ├── config/             # Cấu hình Security, JWT AuthFilter, Swagger, Web CORS
-│   ├── constant/           # Các hằng số: Category, TransactionType, Role, Status, RecurrenceType...
-│   ├── controllers/        # REST Controllers (Auth, User, Account, Transaction, Budget, Goal, Report...)
-│   ├── cronjob/            # Các tác vụ định kỳ tự động (RecurringTransactionCronjob)
-│   ├── entity/             # Các JPA Entities (User, Account, Transaction, Budget, SavingGoal...)
+│   ├── constant/           # Hằng số: Category, TransactionType, SavingContributionType, DebtType, Status...
+│   ├── controllers/        # REST Controllers (Auth, User, Account, Transaction, Budget, SavingGoal, Debt, Report...)
+│   ├── cronjob/            # Tác vụ định kỳ tự động (RecurringTransactionCronjob)
+│   ├── entity/             # JPA Entities (User, Account, Transaction, Budget, SavingGoal, SavingGoalContribution, Debt...)
 │   │   └── base/           # EntityBase (UUID), AuditEntity (createdAt, updatedAt...)
-│   ├── exception/          # Custom Deserializer & Exception Handlers
-│   ├── mapper/             # MapStruct Mappers (UserMapper, TransactionMapper, SavingGoalMapper...)
+│   ├── exception/          # Custom Deserializer & Global Exception Handlers
+│   ├── mapper/             # MapStruct Mappers (SavingGoalMapper, SavingGoalContributionMapper, DebtMapper...)
 │   ├── model/              # DTOs Request & Response, PageResponse, AbstractResponse
 │   ├── repository/         # Spring Data JPA Repositories
-│   ├── services/           # Business Logic Services (UserService, TransactionService, EmailService...)
+│   ├── services/           # Business Logic Services (SavingGoalService, DebtService, TransactionService...)
 │   └── util/               # Tiện ích JwtTokenUtil
 ├── src/main/resources/
-│   └── application.properties # File cấu hình Database, Mail SMTP, JWT Secret...
+│   └── application.properties # Cấu hình Database, Mail SMTP, JWT Secret...
 ├── images/                 # Thư mục lưu trữ ảnh hóa đơn / upload
 └── pom.xml                 # Maven Dependencies & Plugins
 ```
@@ -247,27 +250,31 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `POST` | `/recurring-transactions/{id}/execute-now`| Ghi nhận giao dịch ngay lập tức |
 | `DELETE`| `/recurring-transactions/{id}` | Xóa quy tắc định kỳ |
 
-### 7. Saving Goals (`/saving-goals`)
+### 7. Saving Goals & Contributions (`/saving-goals`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/saving-goals` | Lấy danh sách mục tiêu tiết kiệm |
-| `GET` | `/saving-goals/{id}` | Xem chi tiết mục tiêu & tiến độ `%` |
-| `POST` | `/saving-goals` | Tạo mục tiêu mới |
-| `POST` | `/saving-goals/{id}` | Cập nhật mục tiêu |
-| `POST` | `/saving-goals/{id}/deposit` | Nạp tiền vào quỹ (tự động đạt 100% khi đủ) |
-| `POST` | `/saving-goals/{id}/withdraw`| Rút tiền từ quỹ về tài khoản/ví |
-| `DELETE`| `/saving-goals/{id}` | Xóa mục tiêu |
+| `GET` | `/saving-goals` | Lấy danh sách mục tiêu tiết kiệm (lọc theo `status`) |
+| `GET` | `/saving-goals/{id}` | Xem chi tiết mục tiêu, tiến độ `%` và toàn bộ lịch sử góp quỹ (`contributions`) |
+| `POST` | `/saving-goals` | Tạo mục tiêu mới (khởi tạo số tiền ban đầu $\ge 0$) |
+| `POST` | `/saving-goals/{id}` | Cập nhật thông tin mục tiêu (tên, số tiền đích, hạn chót, màu sắc) |
+| `POST` | `/saving-goals/{id}/deposit` | Nạp tiền vào quỹ (tự động cập nhật `COMPLETED` khi đạt $\ge 100\%$) |
+| `POST` | `/saving-goals/{id}/withdraw`| Rút tiền từ quỹ về tài khoản ví/ngân hàng |
+| `GET` | `/saving-goals/{id}/contributions` | Lấy danh sách toàn bộ lịch sử nạp/rút tiền của mục tiêu |
+| `POST` | `/saving-goals/{id}/contributions` | Thêm bản ghi đóng góp hoặc rút quỹ trực tiếp |
+| `DELETE`| `/saving-goals/{id}/contributions/{contributionId}` | Hủy 1 lần đóng góp (tự động hoàn tác số dư mục tiêu & tài khoản ví) |
+| `DELETE`| `/saving-goals/{id}` | Xóa mục tiêu tiết kiệm và toàn bộ lịch sử đóng góp liên quan |
 
 ### 8. Debt Management - Sổ nợ (`/debts`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/debts` | Lấy danh sách khoản nợ (lọc theo `type`: 1-Đi vay, 2-Cho vay và `status`) |
-| `GET` | `/debts/{id}` | Xem chi tiết 1 khoản nợ + lịch sử các lần trả |
+| `GET` | `/debts/{id}` | Xem chi tiết 1 khoản nợ + lịch sử các lần trả (`payments`) |
 | `POST` | `/debts` | Tạo mới khoản nợ (tùy chọn trích/nhận tiền từ ví `accountId`) |
 | `POST` | `/debts/{id}` | Sửa thông tin khoản nợ (tên, sđt, ngày hẹn trả, ghi chú) |
+| `POST` | `/debts/{id}/settle` | Tất toán / Miễn nợ khoản nợ |
 | `POST` | `/debts/{id}/payments` | Ghi nhận 1 lần trả/thu nợ (tự động đổi `PAID` khi hết nợ) |
 | `DELETE`| `/debts/{id}/payments/{paymentId}` | Hủy 1 lần trả tiền (hoàn tác số dư nợ & ví) |
-| `DELETE`| `/debts/{id}` | Xóa khoản nợ và toàn bộ lịch sử thanh toán liên quan |
+| `DELETE`| `/debts/{id}` | Xóa khoản nợ khỏi hệ thống |
 
 ### 9. Reports & Analytics (`/reports`)
 | Method | Endpoint | Mô tả |
@@ -292,5 +299,5 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
   ```http
   Authorization: Bearer <your_jwt_token>
   ```
-- **Xác thực dữ liệu (Validation)**: Mọi DTO đều được kiểm tra chặt chẽ bằng Jakarta Validation (`@NotNull`, `@NotBlank`, `@Size`...).
+- **Xác thực dữ liệu (Validation)**: Mọi DTO đều được kiểm tra chặt chẽ bằng Jakarta Validation (`@NotNull`, `@NotBlank`, `@DecimalMin`...).
 - **Toàn vẹn dữ liệu (Transaction Management)**: Các thao tác liên quan đến tiền tệ, cập nhật số dư, nạp/rút đều được bọc trong `@Transactional` để đảm bảo tính nhất quán (ACID).
