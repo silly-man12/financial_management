@@ -1,6 +1,7 @@
 package com.example.financial_management.model.saving_goal;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
@@ -12,5 +13,10 @@ public class SavingGoalDepositRequest {
     @NotNull(message = "Số tiền nạp không được để trống")
     private BigDecimal amount;
 
+    private LocalDate contributionDate;
+
     private UUID accountId; // Tài khoản nguồn để trích tiền (tùy chọn)
+
+    private String note;
 }
+

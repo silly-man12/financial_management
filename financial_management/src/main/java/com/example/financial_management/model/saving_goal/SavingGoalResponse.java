@@ -3,6 +3,7 @@ package com.example.financial_management.model.saving_goal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import lombok.Data;
@@ -19,6 +20,8 @@ public class SavingGoalResponse {
     private String description;
     private int status;
     private double progressPercentage; // Tiến độ % (vd: 50.0, 100.0)
+    private List<SavingGoalContributionResponse> contributions; // Lịch sử góp/rút quỹ
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+

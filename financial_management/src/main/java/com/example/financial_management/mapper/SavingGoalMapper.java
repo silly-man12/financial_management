@@ -27,6 +27,7 @@ public interface SavingGoalMapper {
     @Mapping(target = "updatedBy", ignore = true)
     SavingGoal toEntity(SavingGoalRequest request, UUID userId);
 
+    @Mapping(target = "contributions", ignore = true)
     @Mapping(target = "progressPercentage", expression = "java(calculateProgress(entity.getCurrentAmount(), entity.getTargetAmount()))")
     SavingGoalResponse toResponse(SavingGoal entity);
 
