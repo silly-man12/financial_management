@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.financial_management.model.AbstractResponse;
 import com.example.financial_management.model.auth.Auth;
+import com.example.financial_management.model.saving_goal.SavingGoalContributionRequest;
+import com.example.financial_management.model.saving_goal.SavingGoalContributionResponse;
 import com.example.financial_management.model.saving_goal.SavingGoalDepositRequest;
 import com.example.financial_management.model.saving_goal.SavingGoalRequest;
 import com.example.financial_management.model.saving_goal.SavingGoalResponse;
@@ -32,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/saving-goals")
 @RequiredArgsConstructor
-@Tag(name = "Saving Goal API", description = "Quản lý mục tiêu tiết kiệm")
+@Tag(name = "Saving Goal API", description = "Quản lý mục tiêu tiết kiệm và lịch sử góp quỹ")
 public class SavingGoalController {
 
         private final SavingGoalService savingGoalService;
@@ -47,7 +49,7 @@ public class SavingGoalController {
         }
 
         @GetMapping("/{id}")
-        @Operation(summary = "Xem thông tin chi tiết và tiến độ % của 1 mục tiêu")
+        @Operation(summary = "Xem thông tin chi tiết, tiến độ % và toàn bộ lịch sử góp quỹ của 1 mục tiêu")
         public ResponseEntity<AbstractResponse<SavingGoalResponse>> getById(
                         @PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
@@ -94,8 +96,37 @@ public class SavingGoalController {
                                 .withData(() -> savingGoalService.withdraw(id, request, auth));
         }
 
+        @GetMapping("/{id}/contributions")
+        @Operation(summary = "Lấy danh sách lịch sử nạp/rút tiền của mục tiêu tiết kiệm")
+        public ResponseEntity<AbstractResponse<List<SavingGoalContributionResponse>>> getContributions(
+                        @PathVariable UUID id,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<List<SavingGoalContributionResponse>>()
+                                .withData(() -> savingGoalService.getContributions(id, auth));
+        }
+
+        @PostMapping("/{id}/contributions")
+        @Operation(summary = "Thêm bản ghi đóng góp / rút quỹ trực tiếp")
+        public ResponseEntity<AbstractResponse<SavingGoalResponse>> addContribution(
+                        @PathVariable UUID id,
+                        @Valid @RequestBody SavingGoalContributionRequest request,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<SavingGoalResponse>()
+                                .withData(() -> savingGoalService.addContribution(id, request, auth));
+        }
+
+        @DeleteMapping("/{id}/contributions/{contributionId}")
+        @Operation(summary = "Hủy 1 lần đóng góp (hoàn tác số dư mục tiêu & số dư tài khoản liên quan)")
+        public ResponseEntity<AbstractResponse<SavingGoalResponse>> deleteContribution(
+                        @PathVariable UUID id,
+                        @PathVariable UUID contributionId,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<SavingGoalResponse>()
+                                .withData(() -> savingGoalService.deleteContribution(id, contributionId, auth));
+        }
+
         @DeleteMapping("/{id}")
-        @Operation(summary = "Xóa bỏ mục tiêu tiết kiệm")
+        @Operation(summary = "Xóa bỏ mục tiêu tiết kiệm (và toàn bộ lịch sử góp quỹ liên quan)")
         public ResponseEntity<AbstractResponse<Boolean>> delete(
                         @PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
