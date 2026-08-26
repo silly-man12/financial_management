@@ -74,6 +74,15 @@ public class RecurringTransactionController {
                                 .withData(() -> recurringTransactionService.updateStatus(id, status, auth));
         }
 
+        @PostMapping("/{id}/execute-now")
+        @Operation(summary = "Ghi nhận giao dịch ngay lập tức theo quy tắc này (không cần đợi đến ngày đến hạn)")
+        public ResponseEntity<AbstractResponse<RecurringTransactionResponse>> executeNow(
+                        @PathVariable UUID id,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<RecurringTransactionResponse>()
+                                .withData(() -> recurringTransactionService.executeNow(id, auth));
+        }
+
         @DeleteMapping("/{id}")
         @Operation(summary = "Xóa giao dịch định kỳ (không xóa các giao dịch lịch sử)")
         public ResponseEntity<AbstractResponse<Boolean>> delete(

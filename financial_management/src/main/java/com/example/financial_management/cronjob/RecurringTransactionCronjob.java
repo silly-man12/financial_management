@@ -13,9 +13,9 @@ public class RecurringTransactionCronjob {
 
     private final RecurringTransactionService recurringTransactionService;
 
-    // Mùng 5 hàng tháng 12h
-    @Scheduled(cron = "0 0 12 5 * *")
+    // Quét tự động hàng ngày lúc 00:00:00
+    @Scheduled(cron = "0 0 0 * * *")
     public void execute() {
-        recurringTransactionService.executeNow();
+        recurringTransactionService.executeAllDue();
     }
 }

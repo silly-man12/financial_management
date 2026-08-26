@@ -545,8 +545,7 @@ public class ReportService {
                         return;
                 }
 
-                boolean hasAccess = auth.getAccounts().stream()
-                                .anyMatch(acc -> acc.getId().equals(accountId));
+                boolean hasAccess = accountRepository.existsByIdAndUserId(accountId, auth.getUUID());
 
                 if (!hasAccess) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied for this account");
