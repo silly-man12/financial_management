@@ -1,9 +1,10 @@
 package com.example.financial_management.model.transaction;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import lombok.Data;
 
 @Data
@@ -15,5 +16,7 @@ public class TransactionRequest {
     private int currency;
     private String description;
     private boolean haveImage;
-    private OffsetDateTime createAt;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+    private LocalDateTime createAt;
 }
