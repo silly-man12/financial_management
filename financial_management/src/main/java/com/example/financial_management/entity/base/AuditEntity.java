@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Setter
 public abstract class AuditEntity {
 
-    @Column(name = "created_at", updatable = false, nullable = true)
+    @Column(name = "created_at", nullable = true)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = true)

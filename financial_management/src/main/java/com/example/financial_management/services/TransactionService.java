@@ -39,7 +39,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -141,7 +141,7 @@ public class TransactionService {
         // Tạo transaction
         Transaction transaction = transactionMapper.toEntity(request, account.getUserId());
         if (request.getCreateAt() != null) {
-            transaction.setCreatedAt(request.getCreateAt().toLocalDateTime());
+            transaction.setCreatedAt(request.getCreateAt());
         }
 
         // Xử lý ảnh
@@ -201,18 +201,20 @@ public class TransactionService {
         transaction.setAmount(updated.getAmount());
         transaction.setDescription(updated.getDescription());
         transaction.setType(updated.getType());
+        transaction.setCategory(updated.getCategory());
+        transaction.setCurrency(updated.getCurrency());
         transaction.setAccountId(updated.getAccountId());
         
-        // Tránh NullPointerException nếu createAt không được gửi lên
+        // Cập nhật ngày giờ giao dịch nếu có gửi lên
         if (updated.getCreateAt() != null) {
-            transaction.setCreatedAt(updated.getCreateAt().toLocalDateTime());
+            transaction.setCreatedAt(updated.getCreateAt());
         }
 
         validateCurrency(updated.getCurrency(), newAccount);
         validateCategory(updated.getType(), updated.getCategory());
         handleTransactionImage(transaction, updated.isHaveImage(), file);
 
-        Transaction saved = transactionRepository.save(transaction);
+        Transaction saved = transactionRepository.saveAndFlush(transaction);
 
         // Trả response có thêm finalDelta
         TransactionUpdateResponse response = transactionMapper.toUpdateResponse(saved);
@@ -313,7 +315,7 @@ public class TransactionService {
             BigDecimal amount,
             Integer transactionType,
             String description,
-            OffsetDateTime createdAt,
+            LocalDateTime createdAt,
             int currency) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
@@ -323,7 +325,7 @@ public class TransactionService {
         transaction.setCategory(Category.TRANSFER);
         transaction.setCurrency(currency);
         transaction.setDescription(description);
-        transaction.setCreatedAt(createdAt != null ? createdAt.toLocalDateTime() : null);
+        transaction.setCreatedAt(createdAt);
         return transaction;
     }
 
