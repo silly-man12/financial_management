@@ -32,6 +32,16 @@ public class AccountService {
     private final UserRepository userRepository;
     private final AccountMapper accountMapper;
     private final TransactionRepository transactionRepository;
+    private final CurrencyExchangeService currencyExchangeService;
+
+    private AccountResponse toEnrichedResponse(Account account) {
+        AccountResponse response = accountMapper.toResponse(account);
+        if (response != null) {
+            response.setExchangeRate(currencyExchangeService.getCurrentRate());
+            response.setBalanceUsd(currencyExchangeService.calculateUsd(response.getBalance(), response.getCurrency()));
+        }
+        return response;
+    }
 
     @Transactional
     public AccountResponse createAccount(AccountRequest request, Auth auth) {
@@ -48,7 +58,7 @@ public class AccountService {
 
         Account saved = accountRepository.save(account);
 
-        return accountMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     @Transactional
@@ -75,7 +85,7 @@ public class AccountService {
 
         Account saved = accountRepository.saveAndFlush(account);
 
-        return accountMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     @Transactional
@@ -92,7 +102,7 @@ public class AccountService {
         account.setStatus(status);
         Account saved = accountRepository.saveAndFlush(account);
 
-        return accountMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     @Transactional
@@ -173,7 +183,7 @@ public class AccountService {
     public AccountResponse getAccountById(UUID accountId, Auth auth) {
         Account account = validateAccount(accountId, auth, Status.ACTIVE);
 
-        return accountMapper.toResponse(account);
+        return toEnrichedResponse(account);
     }
 
     public Account getAccountById(UUID accountId) {
@@ -185,7 +195,7 @@ public class AccountService {
         User user = validateUser(auth);
         List<Account> accounts = accountRepository.findAllByUserId(user.getId());
         return accounts.stream()
-                .map(accountMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .toList();
     }
 

@@ -12,6 +12,7 @@ public class SavingGoalContributionResponse {
     private UUID id;
     private UUID savingGoalId;
     private BigDecimal amount;
+    private BigDecimal amountUsd;
     private LocalDate contributionDate;
     private int type;
     private String typeName; // "Nạp tiền / Góp quỹ" hoặc "Rút tiền"

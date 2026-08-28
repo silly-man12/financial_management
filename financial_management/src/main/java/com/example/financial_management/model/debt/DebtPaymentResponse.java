@@ -12,6 +12,7 @@ public class DebtPaymentResponse {
     private UUID id;
     private UUID debtId;
     private BigDecimal amount;
+    private BigDecimal amountUsd;
     private LocalDate paymentDate;
     private UUID accountId;
     private UUID transactionId;

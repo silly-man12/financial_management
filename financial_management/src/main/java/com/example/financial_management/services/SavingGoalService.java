@@ -50,6 +50,26 @@ public class SavingGoalService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final TransactionRepository transactionRepository;
+    private final CurrencyExchangeService currencyExchangeService;
+
+    private SavingGoalResponse toEnrichedResponse(SavingGoal goal) {
+        SavingGoalResponse response = savingGoalMapper.toResponse(goal);
+        if (response != null) {
+            response.setTargetAmountUsd(currencyExchangeService.toUsd(response.getTargetAmount()));
+            response.setCurrentAmountUsd(currencyExchangeService.toUsd(response.getCurrentAmount()));
+            if (response.getContributions() != null) {
+                response.getContributions().forEach(this::enrichContribution);
+            }
+        }
+        return response;
+    }
+
+    private SavingGoalContributionResponse enrichContribution(SavingGoalContributionResponse contribution) {
+        if (contribution != null) {
+            contribution.setAmountUsd(currencyExchangeService.toUsd(contribution.getAmount()));
+        }
+        return contribution;
+    }
 
     /**
      * 1. Lấy danh sách mục tiêu của user (hỗ trợ lọc theo status)
@@ -65,7 +85,7 @@ public class SavingGoalService {
         }
 
         return list.stream()
-                .map(savingGoalMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .toList();
     }
 
@@ -79,13 +99,14 @@ public class SavingGoalService {
                 .orElseThrow(
                         () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy mục tiêu tiết kiệm"));
 
-        SavingGoalResponse response = savingGoalMapper.toResponse(savingGoal);
+        SavingGoalResponse response = toEnrichedResponse(savingGoal);
 
         // Lấy lịch sử góp quỹ
         List<SavingGoalContributionResponse> contributions = savingGoalContributionRepository
                 .findAllBySavingGoalIdOrderByContributionDateDesc(id)
                 .stream()
                 .map(savingGoalContributionMapper::toResponse)
+                .map(this::enrichContribution)
                 .toList();
         response.setContributions(contributions);
 

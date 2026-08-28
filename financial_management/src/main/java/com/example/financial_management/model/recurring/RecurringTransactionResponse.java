@@ -14,6 +14,7 @@ public class RecurringTransactionResponse {
     private UUID accountId;
 
     private BigDecimal amount;
+    private BigDecimal amountUsd;
     private int type;
     private int category;
     private int currency;

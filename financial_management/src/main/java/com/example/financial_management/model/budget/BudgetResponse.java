@@ -12,5 +12,6 @@ public class BudgetResponse {
     private int category;
     private String description;
     private BigDecimal amount;
+    private BigDecimal amountUsd;
     private String monthYear;
 }

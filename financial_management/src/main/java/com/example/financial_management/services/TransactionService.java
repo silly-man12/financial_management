@@ -53,9 +53,29 @@ public class TransactionService {
     private final AccountService accountService;
     private final DebtPaymentRepository debtPaymentRepository;
     private final SavingGoalContributionRepository savingGoalContributionRepository;
+    private final CurrencyExchangeService currencyExchangeService;
 
     @Value("${app.upload.dir}")
     private String uploadDir;
+
+    private TransactionResponse toEnrichedResponse(Transaction transaction) {
+        TransactionResponse response = transactionMapper.toResponse(transaction);
+        if (response != null) {
+            response.setExchangeRate(currencyExchangeService.getCurrentRate());
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+        }
+        return response;
+    }
+
+    private TransactionUpdateResponse toEnrichedUpdateResponse(Transaction transaction, BigDecimal finalDelta) {
+        TransactionUpdateResponse response = transactionMapper.toUpdateResponse(transaction);
+        if (response != null) {
+            response.setExchangeRate(currencyExchangeService.getCurrentRate());
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+            response.setDifference(finalDelta);
+        }
+        return response;
+    }
 
     public List<TransactionResponse> getAllTransactions(Auth auth) {
         User user = getUser(auth);
@@ -63,7 +83,7 @@ public class TransactionService {
         return transactionRepository
                 .findByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
-                .map(transactionMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .toList();
     }
 
@@ -72,7 +92,7 @@ public class TransactionService {
 
         Page<TransactionResponse> pageResult = transactionRepository
                 .findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
-                .map(transactionMapper::toResponse);
+                .map(this::toEnrichedResponse);
 
         return new PageResponse<>(
                 pageResult.getContent(),
@@ -102,7 +122,7 @@ public class TransactionService {
                             month,
                             year)
                     .stream()
-                    .map(transactionMapper::toResponse)
+                    .map(this::toEnrichedResponse)
                     .toList();
         } catch (NumberFormatException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Month and Year must be numbers");
@@ -112,7 +132,7 @@ public class TransactionService {
     public TransactionResponse getById(UUID id, Auth auth) {
         User user = getUser(auth);
         return transactionRepository.findByIdAndUserId(id, user.getId())
-                .map(transactionMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
@@ -121,7 +141,7 @@ public class TransactionService {
         Account account = accountService.validateAccount(accountId, auth, Status.ACTIVE);
         Page<TransactionResponse> pageResult = transactionRepository
                 .findByAccountIdAndUserId(account.getId(), user.getId(), pageable)
-                .map(transactionMapper::toResponse);
+                .map(this::toEnrichedResponse);
 
         return new PageResponse<>(
                 pageResult.getContent(),
@@ -156,7 +176,7 @@ public class TransactionService {
         // Lưu transaction
         Transaction saved = transactionRepository.save(transaction);
 
-        return transactionMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     @Transactional
@@ -216,10 +236,8 @@ public class TransactionService {
 
         Transaction saved = transactionRepository.saveAndFlush(transaction);
 
-        // Trả response có thêm finalDelta
-        TransactionUpdateResponse response = transactionMapper.toUpdateResponse(saved);
-        response.setDifference(finalDelta);
-        return response;
+        // Trả response có thêm finalDelta và quy đổi USD
+        return toEnrichedUpdateResponse(saved, finalDelta);
     }
 
     @Transactional
@@ -306,7 +324,7 @@ public class TransactionService {
         Transaction savedSourceTransaction = transactionRepository.save(sourceTransaction);
         transactionRepository.save(targetTransaction);
 
-        return transactionMapper.toResponse(savedSourceTransaction);
+        return toEnrichedResponse(savedSourceTransaction);
     }
 
     private Transaction buildTransferTransaction(
@@ -344,7 +362,7 @@ public class TransactionService {
                 pageable);
 
         return new PageResponse<>(
-                result.getContent().stream().map(transactionMapper::toResponse).toList(),
+                result.getContent().stream().map(this::toEnrichedResponse).toList(),
                 result.getNumber() + 1,
                 result.getSize(),
                 result.getTotalElements(),

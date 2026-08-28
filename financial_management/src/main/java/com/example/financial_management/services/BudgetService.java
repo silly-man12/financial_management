@@ -32,11 +32,20 @@ public class BudgetService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final BudgetMapper budgetMapper;
+    private final CurrencyExchangeService currencyExchangeService;
+
+    private BudgetResponse toEnrichedResponse(Budget budget) {
+        BudgetResponse response = budgetMapper.toResponse(budget);
+        if (response != null) {
+            response.setAmountUsd(currencyExchangeService.toUsd(response.getAmount()));
+        }
+        return response;
+    }
 
     public List<BudgetResponse> getBudgets(Auth auth) {
         User user = validateUser(auth);
         List<Budget> budgets = budgetRepository.findAllByUserId(user.getId());
-        return budgets.stream().map(budgetMapper::toResponse).toList();
+        return budgets.stream().map(this::toEnrichedResponse).toList();
     }
 
     public List<BudgetCheckingResponse> checkingBudget(int month, int year, Auth auth) {
@@ -55,6 +64,7 @@ public class BudgetService {
             response.setId(budget.getId().toString());
             response.setCategory(budget.getCategory());
             response.setAmount(budget.getAmount());
+            response.setAmountUsd(currencyExchangeService.toUsd(budget.getAmount()));
 
             BigDecimal spending = transactionRepository.sumSpendingByCategoryAndMonth(
                     user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
@@ -64,9 +74,11 @@ public class BudgetService {
             }
 
             response.setSpending(spending);
+            response.setSpendingUsd(currencyExchangeService.toUsd(spending));
 
             BigDecimal overSpending = budget.getAmount().subtract(spending);
             response.setOverSpending(overSpending);
+            response.setOverSpendingUsd(currencyExchangeService.toUsd(overSpending));
 
             if (overSpending.compareTo(BigDecimal.ZERO) < 0) {
                 response.setDescription("Vượt quá chi tiêu");
@@ -88,7 +100,7 @@ public class BudgetService {
             throw new RuntimeException("Unauthorized");
         }
 
-        return budgetMapper.toResponse(budget);
+        return toEnrichedResponse(budget);
     }
 
     public BudgetResponse createBudget(BudgetRequest request, Auth auth) {
@@ -104,7 +116,7 @@ public class BudgetService {
         budget.setYear(request.getYear());
 
         Budget saved = budgetRepository.save(budget);
-        BudgetResponse response = budgetMapper.toResponse(saved);
+        BudgetResponse response = toEnrichedResponse(saved);
         log.info("Budget created: {}", response);
         return response;
     }
@@ -127,7 +139,7 @@ public class BudgetService {
         budget.setYear(request.getYear());
 
         Budget updated = budgetRepository.save(budget);
-        BudgetResponse response = budgetMapper.toResponse(updated);
+        BudgetResponse response = toEnrichedResponse(updated);
         log.info("Budget updated: {}", response);
         return response;
     }
