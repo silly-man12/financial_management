@@ -2,8 +2,10 @@ package com.example.financial_management.model.transaction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+import com.example.financial_management.model.tag.TagResponse;
 import lombok.Data;
 
 @Data
@@ -20,6 +22,8 @@ public class TransactionResponse {
     private String description;
     private String imagePath;
     private boolean haveImage;
+    private List<TagResponse> tags;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+

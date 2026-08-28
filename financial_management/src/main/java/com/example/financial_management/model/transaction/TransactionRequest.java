@@ -2,6 +2,7 @@ package com.example.financial_management.model.transaction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,7 +17,9 @@ public class TransactionRequest {
     private int currency;
     private String description;
     private boolean haveImage;
+    private List<String> tags;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime createAt;
 }
+

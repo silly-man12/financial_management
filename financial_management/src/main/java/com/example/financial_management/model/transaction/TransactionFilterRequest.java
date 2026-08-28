@@ -13,6 +13,9 @@ public class TransactionFilterRequest {
     private List<Integer> category;
     private List<UUID> accountId;
     private Integer type;
+    private UUID tagId;
+    private String tag;
     private int page = 1;
     private int size = 20;
 }
+

@@ -190,4 +190,41 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             Pageable pageable);
+
+    @Query("""
+            SELECT DISTINCT t
+            FROM Transaction t
+            LEFT JOIN FETCH t.tags
+            WHERE t.userId = :userId
+            ORDER BY t.createdAt DESC
+            """)
+    List<Transaction> findByUserIdWithTagsOrderByCreatedAtDesc(@Param("userId") UUID userId);
+
+    @Query("""
+            SELECT t
+            FROM Transaction t
+            JOIN t.tags tag
+            WHERE t.userId = :userId
+              AND tag.id = :tagId
+            """)
+    List<Transaction> findAllByUserIdAndTagId(@Param("userId") UUID userId, @Param("tagId") UUID tagId);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.tags tag
+            WHERE t.userId = :userId
+              AND tag.id = :tagId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
+            """)
+    BigDecimal sumSpendingByTagAndMonth(
+            @Param("userId") UUID userId,
+            @Param("tagId") UUID tagId,
+            @Param("month") int month,
+            @Param("year") int year);
 }
+
+

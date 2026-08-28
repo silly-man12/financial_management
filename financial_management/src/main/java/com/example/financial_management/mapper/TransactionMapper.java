@@ -11,12 +11,16 @@ import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.model.transaction.TransactionResponse;
 import com.example.financial_management.model.transaction.TransactionUpdateResponse;
 
-@Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = {TagMapper.class})
 public interface TransactionMapper {
     @Mapping(target = "userId", source = "userId")
+    @Mapping(target = "tags", ignore = true)
     Transaction toEntity(TransactionRequest request, UUID userId);
 
+    @Mapping(target = "tags", source = "tags")
     TransactionResponse toResponse(Transaction entity);
 
+    @Mapping(target = "tags", source = "tags")
     TransactionUpdateResponse toUpdateResponse(Transaction entity);
 }
+
