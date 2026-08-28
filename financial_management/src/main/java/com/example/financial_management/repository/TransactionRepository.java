@@ -175,4 +175,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             int categoryId,
             int month,
             int year);
+
+    @Query("""
+            SELECT t
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.type = :type
+              AND t.createdAt BETWEEN :start AND :end
+            ORDER BY t.amount DESC
+            """)
+    List<Transaction> findTopExpenses(
+            @Param("userId") UUID userId,
+            @Param("type") int type,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            Pageable pageable);
 }

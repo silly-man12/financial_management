@@ -38,7 +38,8 @@ public class SecurityConfig {
             "/auth/forgot-password",
             "/auth/verify-reset-token",
             "/auth/reset-password",
-            "/images/**");
+            "/images/**",
+            "/currency-exchange/**");
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

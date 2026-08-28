@@ -39,6 +39,18 @@ import com.example.financial_management.model.report.request.CategoryReportReque
 import com.example.financial_management.model.report.request.ReportRequest;
 import com.example.financial_management.model.report.request.MonthlyReportRequest;
 import com.example.financial_management.model.report.request.SummaryReportRequest;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.PageRequest;
+
+import com.example.financial_management.model.report.response.AccountFlowResponse;
+import com.example.financial_management.model.report.response.AnalyticsChartPoint;
+import com.example.financial_management.model.report.response.AnalyticsKpiResponse;
+import com.example.financial_management.model.report.response.AnalyticsReportResponse;
+import com.example.financial_management.model.report.response.CategoryDistributionResponse;
+import com.example.financial_management.model.report.response.TopExpenseResponse;
 import com.example.financial_management.model.report.response.AccountSummary;
 import com.example.financial_management.model.report.response.CategoryReportItem;
 import com.example.financial_management.model.report.response.CategoryReportResponse;
@@ -65,7 +77,17 @@ public class ReportService {
         private final TransactionRepository transactionRepository;
         private final TransactionMapper transactionMapper;
         private final UserRepository userRepository;
+        private final CurrencyExchangeService currencyExchangeService;
         private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0");
+
+        private TransactionResponse toEnrichedTransaction(Transaction transaction) {
+                TransactionResponse response = transactionMapper.toResponse(transaction);
+                if (response != null) {
+                        response.setExchangeRate(currencyExchangeService.getCurrentRate());
+                        response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+                }
+                return response;
+        }
 
         public List<TransactionResponse> getSummaryByDataRange(Auth auth, String from, String to) {
                 LocalDateTime startDate = parseDate(from);
@@ -75,7 +97,7 @@ public class ReportService {
                                 auth.getUUID(), startDate, endDate);
 
                 List<TransactionResponse> response = List.copyOf(transactions.stream()
-                                .map(transactionMapper::toResponse)
+                                .map(this::toEnrichedTransaction)
                                 .toList());
 
                 return response;
@@ -332,7 +354,7 @@ public class ReportService {
                 // Lấy lịch sử giao dịch
                 List<TransactionResponse> balanceHistory = transactionRepository.findAllByAccountIdAndUserId(
                                 accountId, user.getId()).stream()
-                                .map(transactionMapper::toResponse)
+                                .map(this::toEnrichedTransaction)
                                 .toList();
 
                 // Tạo response
@@ -589,6 +611,317 @@ public class ReportService {
                         log.error("Error parsing date: {}", dateString, e);
                         throw new IllegalArgumentException(
                                         "Invalid date format. Expected: yyMMdd or yyyy-MM-dd, got: " + dateString);
+                }
+        }
+
+        public AnalyticsReportResponse getAnalyticsReport(Auth auth, String period, String startDateStr, String endDateStr) {
+                User user = getUser(auth);
+                LocalDateTime[] dateRange = resolveDateRange(period, startDateStr, endDateStr);
+                LocalDateTime startDateTime = dateRange[0];
+                LocalDateTime endDateTime = dateRange[1];
+
+                long days = Math.max(1, ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
+                LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
+                LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
+
+                List<Transaction> currentTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                user.getId(), startDateTime, endDateTime);
+                List<Transaction> prevTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                user.getId(), prevStartDateTime, prevEndDateTime);
+
+                BigDecimal totalIncome = currentTransactions.stream()
+                                .filter(t -> t.getType() == TransactionType.INCOME)
+                                .map(Transaction::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal totalExpense = currentTransactions.stream()
+                                .filter(t -> t.getType() == TransactionType.EXPENSE)
+                                .map(Transaction::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal netIncome = totalIncome.subtract(totalExpense);
+
+                Double savingsRate = 0.0;
+                if (totalIncome.compareTo(BigDecimal.ZERO) > 0) {
+                        savingsRate = netIncome.divide(totalIncome, 4, RoundingMode.HALF_UP)
+                                        .multiply(BigDecimal.valueOf(100))
+                                        .doubleValue();
+                }
+
+                BigDecimal dailyAverage = totalExpense.divide(BigDecimal.valueOf(days), 0, RoundingMode.HALF_UP);
+                BigDecimal forecastExpense = dailyAverage.multiply(BigDecimal.valueOf(days));
+
+                BigDecimal prevIncome = prevTransactions.stream()
+                                .filter(t -> t.getType() == TransactionType.INCOME)
+                                .map(Transaction::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal prevExpense = prevTransactions.stream()
+                                .filter(t -> t.getType() == TransactionType.EXPENSE)
+                                .map(Transaction::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                Double incomeGrowthRate = calcPercentChange(totalIncome, prevIncome);
+                Double expenseGrowthRate = calcPercentChange(totalExpense, prevExpense);
+
+                AnalyticsKpiResponse kpi = AnalyticsKpiResponse.builder()
+                                .totalIncome(totalIncome)
+                                .totalExpense(totalExpense)
+                                .netIncome(netIncome)
+                                .savingsRate(savingsRate)
+                                .dailyAverage(dailyAverage)
+                                .forecastExpense(forecastExpense)
+                                .incomeGrowthRate(incomeGrowthRate)
+                                .expenseGrowthRate(expenseGrowthRate)
+                                .build();
+
+                Map<LocalDate, List<Transaction>> dailyMap = currentTransactions.stream()
+                                .collect(Collectors.groupingBy(t -> t.getCreatedAt().toLocalDate()));
+
+                List<AnalyticsChartPoint> chart = new java.util.ArrayList<>();
+                LocalDate cur = startDateTime.toLocalDate();
+                LocalDate end = endDateTime.toLocalDate();
+                DateTimeFormatter labelFormatter = DateTimeFormatter.ofPattern("dd/MM");
+
+                while (!cur.isAfter(end)) {
+                        List<Transaction> dayTx = dailyMap.getOrDefault(cur, List.of());
+                        BigDecimal dayIncome = dayTx.stream()
+                                        .filter(t -> t.getType() == TransactionType.INCOME)
+                                        .map(Transaction::getAmount)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        BigDecimal dayExpense = dayTx.stream()
+                                        .filter(t -> t.getType() == TransactionType.EXPENSE)
+                                        .map(Transaction::getAmount)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        chart.add(AnalyticsChartPoint.builder()
+                                        .label(cur.format(labelFormatter))
+                                        .date(cur.toString())
+                                        .income(dayIncome)
+                                        .expense(dayExpense)
+                                        .net(dayIncome.subtract(dayExpense))
+                                        .build());
+
+                        cur = cur.plusDays(1);
+                }
+
+                return AnalyticsReportResponse.builder()
+                                .kpi(kpi)
+                                .chart(chart)
+                                .build();
+        }
+
+        public List<CategoryDistributionResponse> getCategoryDistributionReport(
+                        Auth auth, String startDateStr, String endDateStr, Integer type) {
+                User user = getUser(auth);
+                int txType = (type != null) ? type : TransactionType.EXPENSE;
+
+                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime startDateTime = dateRange[0];
+                LocalDateTime endDateTime = dateRange[1];
+
+                long days = Math.max(1, ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
+                LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
+                LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
+
+                List<Transaction> currentTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                user.getId(), startDateTime, endDateTime).stream()
+                                .filter(t -> t.getType() == txType)
+                                .toList();
+
+                List<Transaction> prevTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                user.getId(), prevStartDateTime, prevEndDateTime).stream()
+                                .filter(t -> t.getType() == txType)
+                                .toList();
+
+                BigDecimal totalAmount = currentTransactions.stream()
+                                .map(Transaction::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                Map<Integer, BigDecimal> prevCategorySumMap = prevTransactions.stream()
+                                .collect(Collectors.groupingBy(
+                                                Transaction::getCategory,
+                                                Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
+
+                Map<Integer, List<Transaction>> categoryMap = currentTransactions.stream()
+                                .collect(Collectors.groupingBy(Transaction::getCategory));
+
+                List<CategoryDistributionResponse> result = new java.util.ArrayList<>();
+
+                for (Map.Entry<Integer, List<Transaction>> entry : categoryMap.entrySet()) {
+                        int categoryId = entry.getKey();
+                        List<Transaction> txList = entry.getValue();
+
+                        BigDecimal catTotal = txList.stream()
+                                        .map(Transaction::getAmount)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        Double percentage = 0.0;
+                        if (totalAmount.compareTo(BigDecimal.ZERO) > 0) {
+                                percentage = catTotal.divide(totalAmount, 4, RoundingMode.HALF_UP)
+                                                .multiply(BigDecimal.valueOf(100))
+                                                .doubleValue();
+                        }
+
+                        BigDecimal prevCatTotal = prevCategorySumMap.getOrDefault(categoryId, BigDecimal.ZERO);
+                        Double change = calcPercentChange(catTotal, prevCatTotal);
+
+                        result.add(CategoryDistributionResponse.builder()
+                                        .category(categoryId)
+                                        .categoryName(Category.getName(categoryId))
+                                        .total(catTotal)
+                                        .percentage(percentage)
+                                        .transactionCount(txList.size())
+                                        .changeVsPreviousPeriod(change)
+                                        .build());
+                }
+
+                result.sort((a, b) -> b.getTotal().compareTo(a.getTotal()));
+                return result;
+        }
+
+        public List<AccountFlowResponse> getAccountFlowReport(Auth auth, String startDateStr, String endDateStr) {
+                User user = getUser(auth);
+                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime startDateTime = dateRange[0];
+                LocalDateTime endDateTime = dateRange[1];
+
+                List<Account> accounts = accountRepository.findAllByUserId(user.getId());
+                List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                                user.getId(), startDateTime, endDateTime);
+
+                Map<UUID, List<Transaction>> txByAccount = transactions.stream()
+                                .filter(t -> t.getAccountId() != null)
+                                .collect(Collectors.groupingBy(Transaction::getAccountId));
+
+                List<AccountFlowResponse> result = new java.util.ArrayList<>();
+
+                for (Account account : accounts) {
+                        List<Transaction> accTx = txByAccount.getOrDefault(account.getId(), List.of());
+
+                        BigDecimal inflow = accTx.stream()
+                                        .filter(t -> t.getType() == TransactionType.INCOME)
+                                        .map(Transaction::getAmount)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        BigDecimal outflow = accTx.stream()
+                                        .filter(t -> t.getType() == TransactionType.EXPENSE)
+                                        .map(Transaction::getAmount)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                        BigDecimal netFlow = inflow.subtract(outflow);
+
+                        result.add(AccountFlowResponse.builder()
+                                        .accountId(account.getId())
+                                        .accountName(account.getName())
+                                        .accountType(account.getType())
+                                        .inflow(inflow)
+                                        .outflow(outflow)
+                                        .netFlow(netFlow)
+                                        .currentBalance(account.getBalance())
+                                        .build());
+                }
+
+                result.sort((a, b) -> b.getInflow().add(b.getOutflow()).compareTo(a.getInflow().add(a.getOutflow())));
+                return result;
+        }
+
+        public List<TopExpenseResponse> getTopExpensesReport(
+                        Auth auth, String startDateStr, String endDateStr, Integer limit) {
+                User user = getUser(auth);
+                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime startDateTime = dateRange[0];
+                LocalDateTime endDateTime = dateRange[1];
+
+                int queryLimit = (limit != null && limit > 0) ? limit : 5;
+                List<Transaction> topTransactions = transactionRepository.findTopExpenses(
+                                user.getId(),
+                                TransactionType.EXPENSE,
+                                startDateTime,
+                                endDateTime,
+                                PageRequest.of(0, queryLimit));
+
+                Map<UUID, String> accountNameMap = accountRepository.findAllByUserId(user.getId()).stream()
+                                .collect(Collectors.toMap(Account::getId, Account::getName, (a, b) -> a));
+
+                return topTransactions.stream()
+                                .map(t -> TopExpenseResponse.builder()
+                                                .id(t.getId())
+                                                .description(t.getDescription())
+                                                .amount(t.getAmount())
+                                                .category(t.getCategory())
+                                                .categoryName(Category.getName(t.getCategory()))
+                                                .accountId(t.getAccountId())
+                                                .accountName(t.getAccountId() != null ? accountNameMap.getOrDefault(t.getAccountId(), "Không xác định") : "Không xác định")
+                                                .createdAt(t.getCreatedAt())
+                                                .build())
+                                .toList();
+        }
+
+        private LocalDateTime[] resolveDateRange(String period, String startDateStr, String endDateStr) {
+                LocalDate start = parseFlexibleDate(startDateStr);
+                LocalDate end = parseFlexibleDate(endDateStr);
+
+                if (start != null && end != null) {
+                        if (start.isAfter(end)) {
+                                LocalDate temp = start;
+                                start = end;
+                                end = temp;
+                        }
+                } else if (start != null) {
+                        end = start.plusMonths(1).minusDays(1);
+                } else if (end != null) {
+                        start = end.withDayOfMonth(1);
+                } else {
+                        LocalDate now = LocalDate.now();
+                        if ("quarter".equalsIgnoreCase(period)) {
+                                int currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
+                                int startMonth = (currentQuarter - 1) * 3 + 1;
+                                start = LocalDate.of(now.getYear(), startMonth, 1);
+                                end = start.plusMonths(3).minusDays(1);
+                        } else if ("year".equalsIgnoreCase(period)) {
+                                start = LocalDate.of(now.getYear(), 1, 1);
+                                end = LocalDate.of(now.getYear(), 12, 31);
+                        } else {
+                                start = now.withDayOfMonth(1);
+                                end = now.withDayOfMonth(now.lengthOfMonth());
+                        }
+                }
+
+                LocalDateTime startDateTime = start.atStartOfDay();
+                LocalDateTime endDateTime = end.atTime(LocalTime.MAX);
+                return new LocalDateTime[] { startDateTime, endDateTime };
+        }
+
+        private LocalDate parseFlexibleDate(String dateString) {
+                if (dateString == null || dateString.isBlank()) {
+                        return null;
+                }
+                String cleanStr = dateString.trim();
+                if (cleanStr.contains("T")) {
+                        cleanStr = cleanStr.substring(0, cleanStr.indexOf("T"));
+                } else if (cleanStr.contains(" ")) {
+                        cleanStr = cleanStr.substring(0, cleanStr.indexOf(" "));
+                }
+
+                if (cleanStr.matches("\\d{6}")) {
+                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyMMdd"));
+                }
+                if (cleanStr.matches("\\d{8}")) {
+                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                }
+                if (cleanStr.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
+                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyyy-M-d"));
+                }
+                if (cleanStr.matches("\\d{1,2}/\\d{1,2}/\\d{4}")) {
+                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("d/M/yyyy"));
+                }
+                try {
+                        return LocalDate.parse(cleanStr);
+                } catch (Exception e) {
+                        log.warn("Cannot parse date: {}", dateString);
+                        return null;
                 }
         }
 

@@ -12,6 +12,8 @@ public class TransactionResponse {
     private UUID accountId;
     private UUID userId;
     private BigDecimal amount;
+    private BigDecimal amountUsd;
+    private BigDecimal exchangeRate;
     private int type;
     private int currency;
     private int category;

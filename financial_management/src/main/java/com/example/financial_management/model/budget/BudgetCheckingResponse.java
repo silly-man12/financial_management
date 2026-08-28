@@ -10,6 +10,9 @@ public class BudgetCheckingResponse {
     private int category;
     private String description;
     private BigDecimal amount;
+    private BigDecimal amountUsd;
     private BigDecimal spending;
+    private BigDecimal spendingUsd;
     private BigDecimal overSpending;
+    private BigDecimal overSpendingUsd;
 }

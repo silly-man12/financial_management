@@ -48,6 +48,27 @@ public class DebtService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final TransactionRepository transactionRepository;
+    private final CurrencyExchangeService currencyExchangeService;
+
+    private DebtResponse toEnrichedResponse(Debt debt) {
+        DebtResponse response = debtMapper.toResponse(debt);
+        if (response != null) {
+            response.setInitialAmountUsd(currencyExchangeService.toUsd(response.getInitialAmount()));
+            response.setRemainingAmountUsd(currencyExchangeService.toUsd(response.getRemainingAmount()));
+            response.setPaidAmountUsd(currencyExchangeService.toUsd(response.getPaidAmount()));
+            if (response.getPayments() != null) {
+                response.getPayments().forEach(this::enrichDebtPayment);
+            }
+        }
+        return response;
+    }
+
+    private DebtPaymentResponse enrichDebtPayment(DebtPaymentResponse payment) {
+        if (payment != null) {
+            payment.setAmountUsd(currencyExchangeService.toUsd(payment.getAmount()));
+        }
+        return payment;
+    }
 
     /**
      * 1. Lấy danh sách khoản nợ (hỗ trợ lọc theo type và/hoặc status)
@@ -69,7 +90,7 @@ public class DebtService {
         // Tự động kiểm tra cập nhật quá hạn nếu cần
         return list.stream()
                 .map(this::checkAndMapOverdue)
-                .map(debtMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .toList();
     }
 
@@ -84,12 +105,13 @@ public class DebtService {
 
         debt = checkAndMapOverdue(debt);
 
-        DebtResponse response = debtMapper.toResponse(debt);
+        DebtResponse response = toEnrichedResponse(debt);
 
         // Lấy lịch sử các lần trả nợ / thu nợ
         List<DebtPaymentResponse> payments = debtPaymentRepository.findAllByDebtIdOrderByPaymentDateDesc(id)
                 .stream()
                 .map(debtPaymentMapper::toResponse)
+                .map(this::enrichDebtPayment)
                 .toList();
 
         response.setPayments(payments);
@@ -130,7 +152,7 @@ public class DebtService {
             }
         }
 
-        return debtMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     /**
@@ -149,7 +171,7 @@ public class DebtService {
         debt = checkAndMapOverdue(debt);
 
         Debt saved = debtRepository.saveAndFlush(debt);
-        return debtMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     /**

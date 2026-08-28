@@ -14,7 +14,9 @@ public class SavingGoalResponse {
     private UUID userId;
     private String name;
     private BigDecimal targetAmount;
+    private BigDecimal targetAmountUsd;
     private BigDecimal currentAmount;
+    private BigDecimal currentAmountUsd;
     private LocalDate targetDate;
     private String color;
     private String description;

@@ -38,6 +38,15 @@ public class RecurringTransactionService {
     private final RecurringTransactionMapper recurringTransactionMapper;
     private final UserRepository userRepository;
     private final AccountService accountService;
+    private final CurrencyExchangeService currencyExchangeService;
+
+    private RecurringTransactionResponse toEnrichedResponse(RecurringTransaction entity) {
+        RecurringTransactionResponse response = recurringTransactionMapper.toResponse(entity);
+        if (response != null) {
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+        }
+        return response;
+    }
 
     /**
      * Lấy danh sách giao dịch định kỳ của user hiện tại
@@ -54,7 +63,7 @@ public class RecurringTransactionService {
         }
 
         return list.stream()
-                .map(recurringTransactionMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .toList();
     }
 
@@ -67,7 +76,7 @@ public class RecurringTransactionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Không tìm thấy giao dịch định kỳ"));
 
-        return recurringTransactionMapper.toResponse(entity);
+        return toEnrichedResponse(entity);
     }
 
     /**
@@ -94,7 +103,7 @@ public class RecurringTransactionService {
                 request.getRecurrenceInterval()));
 
         RecurringTransaction saved = recurringTransactionRepository.save(entity);
-        return recurringTransactionMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     /**
@@ -124,7 +133,7 @@ public class RecurringTransactionService {
                 request.getRecurrenceInterval()));
 
         RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
-        return recurringTransactionMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     /**
@@ -144,7 +153,7 @@ public class RecurringTransactionService {
 
         entity.setStatus(newStatus);
         RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
-        return recurringTransactionMapper.toResponse(saved);
+        return toEnrichedResponse(saved);
     }
 
     /**

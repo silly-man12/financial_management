@@ -17,8 +17,11 @@ public class DebtResponse {
     private String personName;
     private String phoneNumber;
     private BigDecimal initialAmount;
+    private BigDecimal initialAmountUsd;
     private BigDecimal remainingAmount;
+    private BigDecimal remainingAmountUsd;
     private BigDecimal paidAmount; // Số tiền đã trả/đã thu (initialAmount - remainingAmount)
+    private BigDecimal paidAmountUsd;
     private LocalDate startDate;
     private LocalDate dueDate;
     private int status;

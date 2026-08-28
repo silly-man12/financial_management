@@ -1,6 +1,6 @@
 # 💰 Financial Management System (Hệ thống Quản lý Tài chính Cá nhân)
 
-Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java 21**, cung cấp trọn bộ RESTful API cho ứng dụng quản lý tài chính cá nhân, theo dõi chi tiêu, ngân sách, mục tiêu tiết kiệm, quản lý sổ nợ và phân tích báo cáo tài chính chuyên sâu.
+Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java 21**, cung cấp trọn bộ RESTful API cho ứng dụng quản lý tài chính cá nhân: theo dõi chi tiêu, quản lý ví/tài khoản ngân hàng, lập ngân sách, mục tiêu tiết kiệm và lịch sử góp quỹ, sổ nợ và phân tích báo cáo tài chính chuyên sâu.
 
 ---
 
@@ -11,29 +11,31 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - [⚙️ Cài đặt & Cấu hình](#️-cài-đặt--cấu-hình)
 - [🚀 Chạy ứng dụng](#-chạy-ứng-dụng)
 - [📚 Danh sách API chi tiết](#-danh-sách-api-chi-tiết)
-- [🔐 Bảo mật & Xác thực](#-bảo-mật--xác-thực)
+- [🔢 Bảng tra cứu Hằng số (Constants Reference)](#-bảng-tra-cứu-hằng-số-constants-reference)
+- [🔐 Bảo mật & Toàn vẹn Dữ liệu](#-bảo-mật--toàn-vẹn-dữ-liệu)
 
 ---
 
 ## ✨ Tính năng chính
 
 ### 1. 👤 Quản lý Người dùng & Xác thực (Auth & User)
-- **Đăng ký / Đăng nhập**: Xác thực qua JWT Token, phân quyền `USER` và `ADMIN`.
+- **Đăng ký / Đăng nhập**: Xác thực qua JWT Token, phân quyền `USER (2)` và `ADMIN (1)`.
 - **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt + Custom Salt.
 - **Quên / Đặt lại mật khẩu**: Gửi email chứa link xác thực token tạm thời (15 phút) qua Gmail SMTP.
 - **Quản trị viên (Admin)**: Xem danh sách người dùng, kích hoạt / khóa tài khoản (`ACTIVE = 1` / `INACTIVE = 2`).
 
 ### 2. 💳 Quản lý Tài khoản / Ví (Accounts)
-- Quản lý đa dạng các loại tài khoản: Ví tiền mặt (`CASH = 1`), Ngân hàng (`BANK = 2`), Thẻ tín dụng (`CREDIT_CARD = 3`), Ví điện tử (`E_WALLET = 4`), Tài khoản đầu tư (`INVESTMENT = 5`), Sổ tiết kiệm (`SAVINGS = 6`).
-- Theo dõi số dư tự động cập nhật theo từng giao dịch thu/chi/chuyển tiền/nạp rút quỹ.
-- Chặn xóa cứng tài khoản khi đã có giao dịch sao kê để bảo vệ lịch sử sổ sách.
+- Quản lý đa dạng các loại tài khoản: Ví tiền mặt (`CASH`), Ngân hàng (`BANK`), Thẻ tín dụng (`CREDIT_CARD`), Ví điện tử (`E_WALLET`), Tài khoản đầu tư (`INVESTMENT`), Sổ tiết kiệm (`SAVINGS`).
+- Theo dõi số dư tự động cập nhật chính xác theo từng giao dịch thu/chi/chuyển tiền/nạp rút quỹ.
+- **Bảo vệ toàn vẹn**: Chặn xóa cứng tài khoản khi đã phát sinh giao dịch sao kê để bảo vệ lịch sử sổ sách.
 
 ### 3. 💸 Quản lý Giao dịch (Transactions)
 - **Thu / Chi / Chuyển khoản**: Ghi chép các khoản Thu (`INCOME = 1`), Chi (`EXPENSE = 2`), và Chuyển tiền giữa các tài khoản (`TRANSFER = 3`).
-- **Phân loại danh mục (Category)**: Ăn uống (1), Di chuyển (2), Mua sắm (7), Hóa đơn (4), Tiền lương (11), Đầu tư (13)...
+- **Phân loại danh mục (Category)**: Đầy đủ danh mục chi tiêu thiết yếu (Ăn uống, Di chuyển, Mua sắm, Hóa đơn...) và nguồn thu nhập (Lương, Kinh doanh, Đầu tư...).
 - **Đính kèm hóa đơn**: Hỗ trợ tải lên ảnh hóa đơn / chứng từ thanh toán (`MultipartFile` qua `multipart/form-data`).
+- **Xử lý ngày giờ linh hoạt**: Tự động nhận diện và chuyển đổi mọi định dạng ngày giờ (`yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd`, ISO OffsetDateTime).
 - **Bộ lọc & Phân trang**: Tìm kiếm và lọc giao dịch theo ngày, danh mục, tài khoản, khoảng tiền với Spring JPA Specification.
-- **Ràng buộc toàn vẹn**: Chặn sửa/xóa trực tiếp các giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm.
+- **Ràng buộc toàn vẹn**: Chặn sửa/xóa trực tiếp các giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm để tránh làm lệch số dư.
 
 ### 4. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục theo tháng/năm.
@@ -41,7 +43,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ### 5. 🔄 Giao dịch Định kỳ (Recurring Transactions)
 - Tự động hóa các khoản thu/chi lặp lại theo chu kỳ: Hàng ngày (`DAILY = 1`), Hàng tuần (`WEEKLY = 2`), Hàng tháng (`MONTHLY = 3`), Hàng năm (`YEARLY = 4`).
-- Tự động tính toán `nextExecutionDate` và hỗ trợ Cronjob tự động quét mỗi ngày lúc `00:00:00` để ghi nhận giao dịch đến hạn.
+- Tự động tính toán `nextExecutionDate` và hỗ trợ Cronjob tự động quét mỗi ngày lúc `00:00:00` để ghi nhận các giao dịch đến hạn.
 - Hỗ trợ "Ghi nhận ngay" (`POST /{id}/execute-now`) cho từng quy tắc hoặc Bật / Tạm dừng (`status`: `1: ACTIVE`, `2: INACTIVE`).
 
 ### 6. 🎯 Mục tiêu Tiết kiệm & Lịch sử Góp quỹ (Saving Goals & Contributions)
@@ -91,13 +93,13 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 ```text
 financial_management/
 ├── src/main/java/com/example/financial_management/
-│   ├── config/             # Cấu hình Security, JWT AuthFilter, Swagger, Web CORS
+│   ├── config/             # Cấu hình Security, JWT AuthFilter, Swagger, Web CORS, StringToLocalDateTimeConverter
 │   ├── constant/           # Hằng số: Category, TransactionType, SavingContributionType, DebtType, Status...
 │   ├── controllers/        # REST Controllers (Auth, User, Account, Transaction, Budget, SavingGoal, Debt, Report...)
-│   ├── cronjob/            # Tác vụ định kỳ tự động chạy 00:00:00 hàng ngày (RecurringTransactionCronjob)
+│   ├── cronjob/            # Tác vụ định kỳ tự động quét 00:00:00 hàng ngày (RecurringTransactionCronjob)
 │   ├── entity/             # JPA Entities (User, Account, Transaction, Budget, SavingGoal, SavingGoalContribution, Debt...)
 │   │   └── base/           # EntityBase (UUID), AuditEntity (createdAt, updatedAt...)
-│   ├── exception/          # Custom Deserializer & Global Exception Handlers
+│   ├── exception/          # Custom Deserializers & Global Exception Handlers
 │   ├── mapper/             # MapStruct Mappers (SavingGoalMapper, SavingGoalContributionMapper, DebtMapper...)
 │   ├── model/              # DTOs Request & Response, PageResponse, AbstractResponse
 │   ├── repository/         # Spring Data JPA Repositories
@@ -226,11 +228,11 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/transactions/{id}` | - | Xem chi tiết 1 giao dịch |
 | `GET` | `/transactions/{accountId}/all?page=1&size=20` | - | Lấy giao dịch theo từng tài khoản |
 | `GET` | `/transactions/by-category-and-month?category={c}&monthYear=MM/yyyy` | - | Lọc chi tiêu theo danh mục và tháng |
-| `POST` | `/transactions/create` | `multipart/form-data` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh `file`) |
-| `POST` | `/transactions/{id}` | `multipart/form-data` | Cập nhật giao dịch (hỗ trợ đổi ảnh/số dư) |
+| `POST` | `/transactions/create` | `multipart/form-data` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh `file`, ngày giờ `createAt`) |
+| `POST` | `/transactions/{id}` | `multipart/form-data` | Cập nhật toàn bộ thông tin giao dịch (số tiền, danh mục, ví, ngày giờ, ảnh) |
 | `POST` | `/transactions/transfer` | `application/json` | Chuyển tiền giữa 2 tài khoản |
 | `POST` | `/transactions/filter` | `application/json` | Lọc giao dịch nâng cao đa tiêu chí có phân trang |
-| `DELETE`| `/transactions/{id}` | - | Xóa giao dịch (tự động rollback số dư) |
+| `DELETE`| `/transactions/{id}` | - | Xóa giao dịch (tự động hoàn tác số dư ví) |
 
 ### 5. Budgets (`/budgets`)
 | Method | Endpoint | Mô tả |
@@ -295,12 +297,87 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 
 ---
 
-## 🔐 Bảo mật & Xác thực
+## 🔢 Bảng tra cứu Hằng số (Constants Reference)
 
-- Các endpoint được bảo vệ bởi **Spring Security Filter Chain** và **JWT Authentication Filter**.
-- Khi gửi request đến các API cần xác thực, truyền JWT Token trong header:
+### 1. Phân loại Danh mục (`Category`)
+| ID | Tên danh mục | Loại |
+|---|---|---|
+| `1` | Food (Ăn uống) | Expense |
+| `2` | Transport (Di chuyển) | Expense |
+| `3` | Entertainment (Giải trí) | Expense |
+| `4` | Utilities (Hóa đơn / Tiện ích) | Expense |
+| `5` | Healthcare (Y tế / Sức khỏe) | Expense |
+| `6` | Education (Giáo dục) | Expense |
+| `7` | Shopping (Mua sắm) | Expense |
+| `8` | Housing (Nhà ở) | Expense |
+| `9` | Debt (Trả nợ) | Expense |
+| `10`| Other Expense (Chi tiêu khác) | Expense |
+| `11`| Salary (Tiền lương) | Income |
+| `12`| Business (Kinh doanh) | Income |
+| `13`| Investments (Đầu tư) | Income |
+| `14`| Gifts (Quà tặng) | Income |
+| `15`| Other Income (Thu nhập khác) | Income |
+| `16`| Transfer (Chuyển khoản) | Transfer |
+| `17`| Savings (Tiết kiệm / Góp quỹ) | Savings |
+
+### 2. Loại Giao dịch (`TransactionType`)
+| ID | Mã loại | Mô tả |
+|---|---|---|
+| `1` | `INCOME` | Thu nhập (Cộng tiền vào ví) |
+| `2` | `EXPENSE` | Chi tiêu (Trừ tiền từ ví) |
+| `3` | `TRANSFER` | Chuyển khoản nội bộ giữa 2 ví |
+
+### 3. Loại Tài khoản (`AccountType`)
+| ID | Mã loại | Mô tả |
+|---|---|---|
+| `1` | `CASH` | Tiền mặt |
+| `2` | `BANK` | Tài khoản ngân hàng |
+| `3` | `CREDIT_CARD` | Thẻ tín dụng |
+| `4` | `E_WALLET` | Ví điện tử (Momo, ZaloPay...) |
+| `5` | `INVESTMENT` | Tài khoản đầu tư (Chứng khoán, Vàng...) |
+| `6` | `SAVINGS` | Sổ tiết kiệm |
+| `7` | `OTHER` | Khác |
+
+### 4. Tiền tệ (`Currency`)
+| ID | Mã tiền tệ |
+|---|---|
+| `0` | `USD` |
+| `1` | `VND` |
+
+### 5. Sổ nợ (`DebtType` & `DebtStatus`)
+* **Loại nợ (`DebtType`)**:
+  - `1`: `BORROW` (Đi vay - Nợ phải trả)
+  - `2`: `LEND` (Cho vay - Nợ phải thu)
+* **Trạng thái nợ (`DebtStatus`)**:
+  - `1`: `IN_PROGRESS` (Đang nợ / Chưa thanh toán xong)
+  - `2`: `PAID` (Đã tất toán / Đã trả xong)
+  - `3`: `OVERDUE` (Quá hạn thanh toán)
+
+### 6. Mục tiêu tiết kiệm (`SavingGoalStatus` & `SavingContributionType`)
+* **Trạng thái mục tiêu (`SavingGoalStatus`)**:
+  - `1`: `IN_PROGRESS` (Đang thực hiện)
+  - `2`: `COMPLETED` (Đã hoàn thành đạt $\ge 100\%$)
+  - `3`: `CANCELLED` (Đã hủy)
+* **Loại giao dịch góp quỹ (`SavingContributionType`)**:
+  - `1`: `DEPOSIT` (Nạp tiền / Góp quỹ)
+  - `2`: `WITHDRAW` (Rút tiền từ quỹ)
+
+### 7. Chu kỳ Giao dịch định kỳ (`RecurrenceType`)
+| ID | Chu kỳ | Mô tả |
+|---|---|---|
+| `1` | `DAILY` | Hàng ngày |
+| `2` | `WEEKLY` | Hàng tuần |
+| `3` | `MONTHLY` | Hàng tháng |
+| `4` | `YEARLY` | Hàng năm |
+
+---
+
+## 🔐 Bảo mật & Toàn vẹn Dữ liệu
+
+- **JWT Authentication**: Các endpoint được bảo vệ bởi Spring Security. Gửi token qua header:
   ```http
   Authorization: Bearer <your_jwt_token>
   ```
-- **Xác thực dữ liệu (Validation)**: Mọi DTO đều được kiểm tra chặt chẽ bằng Jakarta Validation (`@NotNull`, `@NotBlank`, `@DecimalMin`...).
-- **Toàn vẹn dữ liệu (Transaction Management)**: Các thao tác liên quan đến tiền tệ, cập nhật số dư, nạp/rút đều được bọc trong `@Transactional` để đảm bảo tính nhất quán (ACID).
+- **Validation**: Mọi DTO đều được kiểm tra chặt chẽ bằng Jakarta Validation (`@NotNull`, `@NotBlank`, `@DecimalMin`...).
+- **Data Integrity**: Các thao tác cập nhật số dư, nạp/rút quỹ, chuyển tiền được bọc trong `@Transactional` để đảm bảo tính nhất quán (ACID).
+- **Protected History**: Giao dịch sinh ra từ Quản lý nợ và Mục tiêu tiết kiệm được bảo vệ, chỉ có thể chỉnh sửa hoặc hủy từ module gốc để tránh mất cân bằng số dư.
