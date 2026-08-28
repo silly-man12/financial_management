@@ -3,6 +3,7 @@ package com.example.financial_management.services;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -11,8 +12,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.financial_management.constant.Status;
 import com.example.financial_management.entity.Budget;
+import com.example.financial_management.entity.Tag;
 import com.example.financial_management.entity.User;
 import com.example.financial_management.mapper.BudgetMapper;
+import com.example.financial_management.mapper.TagMapper;
 import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.budget.BudgetCheckingResponse;
 import com.example.financial_management.model.budget.BudgetRequest;
@@ -32,42 +35,66 @@ public class BudgetService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final BudgetMapper budgetMapper;
+    private final TagMapper tagMapper;
+    private final TagService tagService;
     private final CurrencyExchangeService currencyExchangeService;
 
     private BudgetResponse toEnrichedResponse(Budget budget) {
         BudgetResponse response = budgetMapper.toResponse(budget);
         if (response != null) {
             response.setAmountUsd(currencyExchangeService.toUsd(response.getAmount()));
+            if (budget.getTags() != null && !budget.getTags().isEmpty()) {
+                Tag firstTag = budget.getTags().iterator().next();
+                response.setTagId(firstTag.getId());
+                response.setTagName(firstTag.getName());
+                response.setTagColor(firstTag.getColor());
+                response.setTags(budget.getTags().stream().map(tagMapper::toResponse).toList());
+            }
         }
         return response;
     }
 
     public List<BudgetResponse> getBudgets(Auth auth) {
         User user = validateUser(auth);
-        List<Budget> budgets = budgetRepository.findAllByUserId(user.getId());
+        List<Budget> budgets = budgetRepository.findAllWithTagsByUserId(user.getId());
         return budgets.stream().map(this::toEnrichedResponse).toList();
     }
 
     public List<BudgetCheckingResponse> checkingBudget(int month, int year, Auth auth) {
         User user = validateUser(auth);
-        List<Budget> budgets = budgetRepository.findAllByUserIdAndMonthAndYear(
+        List<Budget> budgets = budgetRepository.findAllWithTagsByUserIdAndMonthAndYear(
                 user.getId(),
                 month,
                 year);
         List<BudgetCheckingResponse> responses = new ArrayList<>();
         for (Budget budget : budgets) {
-            if (budget.getCategory() < 0 || budget.getCategory() > 10) {
-                log.warn("Invalid category {} for budget {}", budget.getCategory(), budget.getId());
-                continue;
-            }
             BudgetCheckingResponse response = new BudgetCheckingResponse();
             response.setId(budget.getId().toString());
             response.setCategory(budget.getCategory());
             response.setAmount(budget.getAmount());
             response.setAmountUsd(currencyExchangeService.toUsd(budget.getAmount()));
 
-            BigDecimal spending = transactionRepository.sumSpendingByCategoryAndMonth(
-                    user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
+            BigDecimal spending = BigDecimal.ZERO;
+            if (budget.getTags() != null && !budget.getTags().isEmpty()) {
+                Tag firstTag = budget.getTags().iterator().next();
+                response.setTagId(firstTag.getId());
+                response.setTagName(firstTag.getName());
+                response.setTagColor(firstTag.getColor());
+                response.setTags(budget.getTags().stream().map(tagMapper::toResponse).toList());
+
+                // Tính tổng chi tiêu theo Tag trong tháng
+                spending = transactionRepository.sumSpendingByTagAndMonth(
+                        user.getId(), firstTag.getId(), budget.getMonth(), budget.getYear());
+            } else if (budget.getTagId() != null) {
+                response.setTagId(budget.getTagId());
+                spending = transactionRepository.sumSpendingByTagAndMonth(
+                        user.getId(), budget.getTagId(), budget.getMonth(), budget.getYear());
+            } else {
+                if (budget.getCategory() >= 0) {
+                    spending = transactionRepository.sumSpendingByCategoryAndMonth(
+                            user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
+                }
+            }
 
             if (spending == null) {
                 spending = BigDecimal.ZERO;
@@ -110,10 +137,20 @@ public class BudgetService {
         Budget budget = new Budget();
         budget.setUserId(user.getId());
         budget.setCategory(request.getCategory());
-        budget.setDescription(request.getDescription().isBlank() ? "" : request.getDescription());
+        budget.setDescription(request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription() : "");
         budget.setAmount(request.getAmount());
         budget.setMonth(request.getMonth());
         budget.setYear(request.getYear());
+
+        if (request.getTags() != null && !request.getTags().isEmpty()) {
+            Set<Tag> resolvedTags = tagService.resolveTags(request.getTags(), user.getId());
+            budget.setTags(resolvedTags);
+            if (!resolvedTags.isEmpty()) {
+                budget.setTagId(resolvedTags.iterator().next().getId());
+            }
+        } else if (request.getTagId() != null) {
+            budget.setTagId(request.getTagId());
+        }
 
         Budget saved = budgetRepository.save(budget);
         BudgetResponse response = toEnrichedResponse(saved);
@@ -133,10 +170,22 @@ public class BudgetService {
         }
 
         budget.setCategory(request.getCategory());
-        budget.setDescription(request.getDescription().isBlank() ? "" : request.getDescription());
+        budget.setDescription(request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription() : "");
         budget.setAmount(request.getAmount());
         budget.setMonth(request.getMonth());
         budget.setYear(request.getYear());
+
+        if (request.getTags() != null) {
+            Set<Tag> resolvedTags = tagService.resolveTags(request.getTags(), user.getId());
+            budget.setTags(resolvedTags);
+            if (!resolvedTags.isEmpty()) {
+                budget.setTagId(resolvedTags.iterator().next().getId());
+            } else {
+                budget.setTagId(null);
+            }
+        } else if (request.getTagId() != null) {
+            budget.setTagId(request.getTagId());
+        }
 
         Budget updated = budgetRepository.save(budget);
         BudgetResponse response = toEnrichedResponse(updated);
@@ -159,10 +208,7 @@ public class BudgetService {
     }
 
     private void validateBudgetRequest(BudgetRequest request) {
-        if (request.getCategory() < 0) {
-            throw new IllegalArgumentException("Category must be a positive integer");
-        }
-        if (request.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Amount must be a positive number");
         }
     }
@@ -172,3 +218,4 @@ public class BudgetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 }
+

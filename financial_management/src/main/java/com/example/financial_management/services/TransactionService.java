@@ -4,6 +4,7 @@ import com.example.financial_management.constant.Category;
 import com.example.financial_management.constant.Status;
 import com.example.financial_management.constant.TransactionType;
 import com.example.financial_management.entity.Account;
+import com.example.financial_management.entity.Tag;
 import com.example.financial_management.entity.Transaction;
 import com.example.financial_management.entity.User;
 import com.example.financial_management.mapper.TransactionMapper;
@@ -41,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -54,6 +56,7 @@ public class TransactionService {
     private final DebtPaymentRepository debtPaymentRepository;
     private final SavingGoalContributionRepository savingGoalContributionRepository;
     private final CurrencyExchangeService currencyExchangeService;
+    private final TagService tagService;
 
     @Value("${app.upload.dir}")
     private String uploadDir;
@@ -81,11 +84,12 @@ public class TransactionService {
         User user = getUser(auth);
 
         return transactionRepository
-                .findByUserIdOrderByCreatedAtDesc(user.getId())
+                .findByUserIdWithTagsOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .map(this::toEnrichedResponse)
                 .toList();
     }
+
 
     public PageResponse<TransactionResponse> getAllTransactionsWithPage(Auth auth, Pageable pageable) {
         User user = getUser(auth);
@@ -167,6 +171,12 @@ public class TransactionService {
         // Xử lý ảnh
         handleTransactionImage(transaction, request.isHaveImage(), file);
 
+        // Xử lý tags
+        if (request.getTags() != null && !request.getTags().isEmpty()) {
+            Set<Tag> resolvedTags = tagService.resolveTags(request.getTags(), account.getUserId());
+            transaction.setTags(resolvedTags);
+        }
+
         // Tính delta
         BigDecimal delta = accountService.calculateDelta(request);
 
@@ -230,6 +240,12 @@ public class TransactionService {
             transaction.setCreatedAt(updated.getCreateAt());
         }
 
+        // Cập nhật tags
+        if (updated.getTags() != null) {
+            Set<Tag> resolvedTags = tagService.resolveTags(updated.getTags(), user.getId());
+            transaction.setTags(resolvedTags);
+        }
+
         validateCurrency(updated.getCurrency(), newAccount);
         validateCategory(updated.getType(), updated.getCategory());
         handleTransactionImage(transaction, updated.isHaveImage(), file);
@@ -239,6 +255,7 @@ public class TransactionService {
         // Trả response có thêm finalDelta và quy đổi USD
         return toEnrichedUpdateResponse(saved, finalDelta);
     }
+
 
     @Transactional
     public boolean deleteTransaction(UUID id, Auth auth) {

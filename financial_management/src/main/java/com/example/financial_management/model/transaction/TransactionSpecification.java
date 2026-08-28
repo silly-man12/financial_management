@@ -6,8 +6,11 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import com.example.financial_management.entity.Tag;
 import com.example.financial_management.entity.Transaction;
 
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 
 public class TransactionSpecification {
@@ -44,7 +47,22 @@ public class TransactionSpecification {
                 predicates.add(cb.equal(root.get("type"), request.getType()));
             }
 
+            if (request.getTagId() != null) {
+                if (query != null) {
+                    query.distinct(true);
+                }
+                Join<Transaction, Tag> tagJoin = root.join("tags", JoinType.INNER);
+                predicates.add(cb.equal(tagJoin.get("id"), request.getTagId()));
+            } else if (request.getTag() != null && !request.getTag().trim().isEmpty()) {
+                if (query != null) {
+                    query.distinct(true);
+                }
+                Join<Transaction, Tag> tagJoin = root.join("tags", JoinType.INNER);
+                predicates.add(cb.equal(cb.lower(tagJoin.get("name")), request.getTag().trim().toLowerCase()));
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 }
+
