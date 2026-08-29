@@ -15,6 +15,7 @@ import com.example.financial_management.model.transaction.TransactionUpdateRespo
 import com.example.financial_management.model.transaction.TransferRequest;
 import com.example.financial_management.services.TransactionService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +83,16 @@ public class TransactionController {
                 return new AbstractResponse<PageResponse<TransactionResponse>>()
                                 .withData(() -> transactionService.getTransactionByAccount(accountId,
                                                 auth, PageRequest.of(page - 1, size)));
+        }
+
+        // Lấy 6 giao dịch gần nhất của tài khoản cụ thể
+        @GetMapping("/{accountId}/recent")
+        @Operation(summary = "Lấy 6 giao dịch gần nhất của tài khoản")
+        public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getRecentByAccount(
+                        @PathVariable UUID accountId,
+                        @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+                return new AbstractResponse<List<TransactionResponse>>()
+                                .withData(() -> transactionService.getRecentTransactionsByAccount(accountId, auth));
         }
 
         @GetMapping("/by-category-and-month")

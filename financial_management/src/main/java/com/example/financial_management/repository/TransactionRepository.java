@@ -44,6 +44,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     Page<Transaction> findByAccountIdAndUserId(UUID accountId, UUID userId, Pageable pageable);
 
+    List<Transaction> findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(UUID accountId, UUID userId);
+
     List<Transaction> findAllByAccountIdAndUserId(UUID accountId, UUID userId);
 
     List<Transaction> findAllByAccountIdAndUserIdAndType(UUID accountId, UUID userId, int type);
