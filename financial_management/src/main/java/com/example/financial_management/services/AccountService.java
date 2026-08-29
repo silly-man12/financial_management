@@ -181,7 +181,8 @@ public class AccountService {
     }
 
     public AccountResponse getAccountById(UUID accountId, Auth auth) {
-        Account account = validateAccount(accountId, auth, Status.ACTIVE);
+        Account account = accountRepository.findByIdAndUserId(accountId, auth.getUUID())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
 
         return toEnrichedResponse(account);
     }

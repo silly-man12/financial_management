@@ -155,6 +155,17 @@ public class TransactionService {
                 pageResult.getTotalPages());
     }
 
+    public List<TransactionResponse> getRecentTransactionsByAccount(UUID accountId, Auth auth) {
+        User user = getUser(auth);
+        Account account = accountService.validateAccount(accountId, auth, Status.ACTIVE);
+
+        return transactionRepository
+                .findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(account.getId(), user.getId())
+                .stream()
+                .map(this::toEnrichedResponse)
+                .toList();
+    }
+
     @Transactional
     public TransactionResponse createTransaction(TransactionRequest request, Auth auth, MultipartFile file) {
         Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
