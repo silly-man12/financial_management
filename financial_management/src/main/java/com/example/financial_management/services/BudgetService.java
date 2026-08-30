@@ -2,6 +2,7 @@ package com.example.financial_management.services;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -75,6 +76,7 @@ public class BudgetService {
             response.setAmountUsd(currencyExchangeService.toUsd(budget.getAmount()));
 
             BigDecimal spending = BigDecimal.ZERO;
+            Set<UUID> budgetTagIds = new HashSet<>();
             if (budget.getTags() != null && !budget.getTags().isEmpty()) {
                 Tag firstTag = budget.getTags().iterator().next();
                 response.setTagId(firstTag.getId());
@@ -82,17 +84,41 @@ public class BudgetService {
                 response.setTagColor(firstTag.getColor());
                 response.setTags(budget.getTags().stream().map(tagMapper::toResponse).toList());
 
-                // Tính tổng chi tiêu theo Tag trong tháng
-                spending = transactionRepository.sumSpendingByTagAndMonth(
-                        user.getId(), firstTag.getId(), budget.getMonth(), budget.getYear());
+                for (Tag tag : budget.getTags()) {
+                    budgetTagIds.add(tag.getId());
+                }
             } else if (budget.getTagId() != null) {
                 response.setTagId(budget.getTagId());
-                spending = transactionRepository.sumSpendingByTagAndMonth(
-                        user.getId(), budget.getTagId(), budget.getMonth(), budget.getYear());
+                budgetTagIds.add(budget.getTagId());
+            }
+
+            if (!budgetTagIds.isEmpty()) {
+                // Tính tổng chi tiêu theo Tag trong tháng
+                spending = transactionRepository.sumSpendingByTagIdsAndMonth(
+                        user.getId(), budgetTagIds, budget.getMonth(), budget.getYear());
             } else {
+                // Ngân sách chưa có tag: tính tổng chi tiêu danh mục nhưng loại trừ các giao dịch có tag của các ngân sách có tag khác trong cùng danh mục và tháng
                 if (budget.getCategory() >= 0) {
-                    spending = transactionRepository.sumSpendingByCategoryAndMonth(
-                            user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
+                    Set<UUID> excludedTagIds = new HashSet<>();
+                    for (Budget otherBudget : budgets) {
+                        if (otherBudget.getCategory() == budget.getCategory() && !otherBudget.getId().equals(budget.getId())) {
+                            if (otherBudget.getTags() != null && !otherBudget.getTags().isEmpty()) {
+                                for (Tag t : otherBudget.getTags()) {
+                                    excludedTagIds.add(t.getId());
+                                }
+                            } else if (otherBudget.getTagId() != null) {
+                                excludedTagIds.add(otherBudget.getTagId());
+                            }
+                        }
+                    }
+
+                    if (!excludedTagIds.isEmpty()) {
+                        spending = transactionRepository.sumSpendingByCategoryAndMonthExcludingTags(
+                                user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear(), excludedTagIds);
+                    } else {
+                        spending = transactionRepository.sumSpendingByCategoryAndMonth(
+                                user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
+                    }
                 }
             }
 
