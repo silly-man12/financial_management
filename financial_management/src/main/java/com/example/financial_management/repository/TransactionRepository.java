@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.example.financial_management.model.report.response.CategoryDistribution;
@@ -165,18 +166,40 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             @Param("toDate") LocalDateTime toDate);
 
     @Query("""
-            SELECT SUM(t.amount)
+            SELECT COALESCE(SUM(t.amount), 0)
             FROM Transaction t
             WHERE t.userId = :userId
-            AND t.category = :categoryId
-            AND MONTH(t.createdAt) = :month
-            AND YEAR(t.createdAt) = :year
+              AND t.category = :categoryId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
             """)
     BigDecimal sumSpendingByCategoryAndMonth(
-            UUID userId,
-            int categoryId,
-            int month,
-            int year);
+            @Param("userId") UUID userId,
+            @Param("categoryId") int categoryId,
+            @Param("month") int month,
+            @Param("year") int year);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.category = :categoryId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
+              AND NOT EXISTS (
+                  SELECT 1 FROM t.tags tag WHERE tag.id IN :excludedTagIds
+              )
+            """)
+    BigDecimal sumSpendingByCategoryAndMonthExcludingTags(
+            @Param("userId") UUID userId,
+            @Param("categoryId") int categoryId,
+            @Param("month") int month,
+            @Param("year") int year,
+            @Param("excludedTagIds") Set<UUID> excludedTagIds);
 
     @Query("""
             SELECT t
@@ -225,6 +248,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
     BigDecimal sumSpendingByTagAndMonth(
             @Param("userId") UUID userId,
             @Param("tagId") UUID tagId,
+            @Param("month") int month,
+            @Param("year") int year);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
+              AND EXISTS (
+                  SELECT 1 FROM t.tags tag WHERE tag.id IN :tagIds
+              )
+            """)
+    BigDecimal sumSpendingByTagIdsAndMonth(
+            @Param("userId") UUID userId,
+            @Param("tagIds") Set<UUID> tagIds,
             @Param("month") int month,
             @Param("year") int year);
 }
