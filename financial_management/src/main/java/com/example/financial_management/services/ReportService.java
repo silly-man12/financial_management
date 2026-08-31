@@ -12,7 +12,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import com.example.financial_management.model.report.response.CategoryDistribution;
@@ -84,14 +83,16 @@ public class ReportService {
                 TransactionResponse response = transactionMapper.toResponse(transaction);
                 if (response != null) {
                         response.setExchangeRate(currencyExchangeService.getCurrentRate());
-                        response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+                        response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(),
+                                        response.getCurrency()));
                 }
                 return response;
         }
 
         public List<TransactionResponse> getSummaryByDataRange(Auth auth, String from, String to) {
-                LocalDateTime startDate = parseDate(from);
-                LocalDateTime endDate = parseDate(to);
+                LocalDateTime[] dateRange = resolveDateRange(null, from, to);
+                LocalDateTime startDate = dateRange[0];
+                LocalDateTime endDate = dateRange[1];
 
                 List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
                                 auth.getUUID(), startDate, endDate);
@@ -590,37 +591,15 @@ public class ReportService {
                 return MONEY_FORMAT.format(amount);
         }
 
-        private LocalDateTime parseDate(String dateString) {
-                try {
-                        // Handle yyMMdd format (e.g., "250610" for June 10, 2025)
-                        if (dateString.matches("\\d{6}")) {
-                                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyMMdd");
-                                java.time.LocalDate date = java.time.LocalDate.parse(dateString, formatter);
-                                return date.atStartOfDay();
-                        }
-
-                        // Handle yyyy-MM-dd format (existing functionality)
-                        if (dateString.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                                return LocalDateTime.parse(dateString + "T00:00:00");
-                        }
-
-                        // Try to parse as ISO date format
-                        return LocalDateTime.parse(dateString + "T00:00:00");
-
-                } catch (Exception e) {
-                        log.error("Error parsing date: {}", dateString, e);
-                        throw new IllegalArgumentException(
-                                        "Invalid date format. Expected: yyMMdd or yyyy-MM-dd, got: " + dateString);
-                }
-        }
-
-        public AnalyticsReportResponse getAnalyticsReport(Auth auth, String period, String startDateStr, String endDateStr) {
+        public AnalyticsReportResponse getAnalyticsReport(Auth auth, String period, String startDateStr,
+                        String endDateStr) {
                 User user = getUser(auth);
                 LocalDateTime[] dateRange = resolveDateRange(period, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
-                long days = Math.max(1, ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
+                long days = Math.max(1,
+                                ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
                 LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
                 LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
 
@@ -721,7 +700,8 @@ public class ReportService {
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
-                long days = Math.max(1, ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
+                long days = Math.max(1,
+                                ChronoUnit.DAYS.between(startDateTime.toLocalDate(), endDateTime.toLocalDate()) + 1);
                 LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
                 LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
 
@@ -742,7 +722,8 @@ public class ReportService {
                 Map<Integer, BigDecimal> prevCategorySumMap = prevTransactions.stream()
                                 .collect(Collectors.groupingBy(
                                                 Transaction::getCategory,
-                                                Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount, BigDecimal::add)));
+                                                Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount,
+                                                                BigDecimal::add)));
 
                 Map<Integer, List<Transaction>> categoryMap = currentTransactions.stream()
                                 .collect(Collectors.groupingBy(Transaction::getCategory));
@@ -853,7 +834,10 @@ public class ReportService {
                                                 .category(t.getCategory())
                                                 .categoryName(Category.getName(t.getCategory()))
                                                 .accountId(t.getAccountId())
-                                                .accountName(t.getAccountId() != null ? accountNameMap.getOrDefault(t.getAccountId(), "Không xác định") : "Không xác định")
+                                                .accountName(t.getAccountId() != null
+                                                                ? accountNameMap.getOrDefault(t.getAccountId(),
+                                                                                "Không xác định")
+                                                                : "Không xác định")
                                                 .createdAt(t.getCreatedAt())
                                                 .build())
                                 .toList();
