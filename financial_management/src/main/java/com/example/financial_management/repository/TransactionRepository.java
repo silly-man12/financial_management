@@ -206,6 +206,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             FROM Transaction t
             WHERE t.userId = :userId
               AND t.type = :type
+              AND t.category != 16
               AND t.createdAt BETWEEN :start AND :end
             ORDER BY t.amount DESC
             """)
