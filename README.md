@@ -30,9 +30,10 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Bảo vệ toàn vẹn**: Chặn xóa cứng tài khoản khi đã phát sinh giao dịch sao kê để bảo vệ lịch sử sổ sách.
 
 ### 3. 💸 Quản lý Giao dịch (Transactions)
-- **Thu / Chi / Chuyển khoản**: Ghi chép các khoản Thu (`INCOME = 1`), Chi (`EXPENSE = 2`), và Chuyển tiền giữa các tài khoản (`TRANSFER = 3`).
-- **Phân loại danh mục (Category)**: Đầy đủ danh mục chi tiêu thiết yếu (Ăn uống, Di chuyển, Mua sắm, Hóa đơn...) và nguồn thu nhập (Lương, Kinh doanh, Đầu tư...).
-- **Đính kèm hóa đơn**: Hỗ trợ tải lên ảnh hóa đơn / chứng từ thanh toán (`MultipartFile` qua `multipart/form-data`).
+- **Thu / Chi / Chuyển khoản**: Ghi chép các khoản Chi (`EXPENSE = 0`), Thu (`INCOME = 1`), và Chuyển tiền giữa các tài khoản (`TRANSFER = 2`).
+- **Phân loại danh mục (Category)**: Đầy đủ danh mục chi tiêu thiết yếu (Ăn uống, Di chuyển, Du lịch, Mua sắm, Hóa đơn...) và nguồn thu nhập (Lương, Kinh doanh, Đầu tư...).
+- **Giao dịch gần nhất**: Hỗ trợ API tra cứu nhanh 6 giao dịch mới nhất của từng tài khoản phục vụ widget/dashboard.
+- **Đính kèm hóa đơn & Thẻ tag**: Hỗ trợ tải lên ảnh hóa đơn / chứng từ thanh toán (`MultipartFile` qua `multipart/form-data`) và gắn các thẻ phân loại (`Tag`).
 - **Xử lý ngày giờ linh hoạt**: Tự động nhận diện và chuyển đổi mọi định dạng ngày giờ (`yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd`, ISO OffsetDateTime).
 - **Bộ lọc & Phân trang**: Tìm kiếm và lọc giao dịch theo ngày, danh mục, tài khoản, khoảng tiền với Spring JPA Specification.
 - **Ràng buộc toàn vẹn**: Chặn sửa/xóa trực tiếp các giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm để tránh làm lệch số dư.
@@ -62,7 +63,17 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Tự động tất toán**: Chuyển trạng thái sang `PAID = 2` khi số nợ còn lại $= 0$.
 - **Cảnh báo quá hạn**: Tự động chuyển trạng thái `OVERDUE = 3` khi vượt quá hạn hẹn trả (`dueDate`).
 
-### 8. 📈 Báo cáo & Thống kê (Reports & Statistics)
+### 8. 🏷️ Quản lý Thẻ Tag (Tags)
+- Tạo và quản lý các thẻ tag phân loại kèm màu sắc tùy biến.
+- Gắn nhiều tag vào một giao dịch hoặc liên kết tag với ngân sách chi tiêu.
+- Thống kê chi tiết và tổng hợp số tiền thu/chi theo từng thẻ tag.
+
+### 9. 💱 Tỷ giá Ngoại tệ (Currency Exchange)
+- Tích hợp API cập nhật tỷ giá ngoại tệ USD/VND theo ngày.
+- Cronjob tự động đồng bộ tỷ giá mới nhất hoặc kích hoạt đồng bộ thủ công (`POST /currency-exchange/sync`).
+- Tự động quy đổi và hiển thị giá trị tương đương theo USD (`balanceUsd`, `amountUsd`, `spendingUsd`...) trên mọi báo cáo và phản hồi API.
+
+### 10. 📈 Báo cáo & Thống kê (Reports & Statistics)
 - **Tổng quan tài chính**: Báo cáo tổng thu, tổng chi, số dư ròng theo ngày/tháng/khoảng thời gian.
 - **Báo cáo cơ cấu danh mục**: Biểu đồ phân bổ chi tiêu theo % từng nhóm danh mục.
 - **Báo cáo so sánh**: So sánh tăng/giảm thu chi giữa tháng này với tháng trước.
@@ -226,15 +237,26 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `GET` | `/transactions/all` | - | Lấy toàn bộ lịch sử giao dịch |
 | `GET` | `/transactions/all-with-pages?page=1&size=20` | - | Lấy danh sách giao dịch có phân trang |
 | `GET` | `/transactions/{id}` | - | Xem chi tiết 1 giao dịch |
-| `GET` | `/transactions/{accountId}/all?page=1&size=20` | - | Lấy giao dịch theo từng tài khoản |
+| `GET` | `/transactions/{accountId}/all?page=1&size=20` | - | Lấy giao dịch theo từng tài khoản (phân trang) |
+| `GET` | `/transactions/{accountId}/recent` | - | **Lấy 6 giao dịch gần nhất** của tài khoản cụ thể |
 | `GET` | `/transactions/by-category-and-month?category={c}&monthYear=MM/yyyy` | - | Lọc chi tiêu theo danh mục và tháng |
-| `POST` | `/transactions/create` | `multipart/form-data` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh `file`, ngày giờ `createAt`) |
-| `POST` | `/transactions/{id}` | `multipart/form-data` | Cập nhật toàn bộ thông tin giao dịch (số tiền, danh mục, ví, ngày giờ, ảnh) |
+| `POST` | `/transactions/create` | `multipart/form-data` | Tạo giao dịch thu/chi (hỗ trợ upload ảnh `file`, ngày giờ `createAt`, gắn `tags`) |
+| `POST` | `/transactions/{id}` | `multipart/form-data` | Cập nhật toàn bộ thông tin giao dịch (số tiền, danh mục, ví, ngày giờ, ảnh, `tags`) |
 | `POST` | `/transactions/transfer` | `application/json` | Chuyển tiền giữa 2 tài khoản |
 | `POST` | `/transactions/filter` | `application/json` | Lọc giao dịch nâng cao đa tiêu chí có phân trang |
 | `DELETE`| `/transactions/{id}` | - | Xóa giao dịch (tự động hoàn tác số dư ví) |
 
-### 5. Budgets (`/budgets`)
+### 5. Tags Management (`/tags`)
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| `GET` | `/tags` hoặc `/tags/all` | Lấy toàn bộ danh sách thẻ tag của người dùng |
+| `POST` | `/tags` hoặc `/tags/create` | Tạo mới thẻ tag (tên thẻ, mã màu sắc) |
+| `PUT` | `/tags/{id}` | Cập nhật thông tin thẻ tag |
+| `DELETE`| `/tags/{id}` | Xóa thẻ tag |
+| `GET` | `/tags/summary` | Bảng tổng kết chi tiêu / thu nhập theo từng thẻ tag |
+| `GET` | `/tags/{id}/summary` | Thống kê chi tiết thu chi của 1 thẻ tag cụ thể |
+
+### 6. Budgets (`/budgets`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/budgets/all` | Lấy danh sách tất cả ngân sách |
@@ -244,7 +266,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `POST` | `/budgets/update?budgetId={budgetId}` | Cập nhật ngân sách |
 | `POST` | `/budgets/delete?budgetId={budgetId}` | Xóa ngân sách |
 
-### 6. Recurring Transactions (`/recurring-transactions`)
+### 7. Recurring Transactions (`/recurring-transactions`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/recurring-transactions` | Lấy danh sách quy tắc định kỳ (lọc theo `status`) |
@@ -255,7 +277,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `POST` | `/recurring-transactions/{id}/execute-now`| Ghi nhận giao dịch ngay lập tức theo quy tắc này |
 | `DELETE`| `/recurring-transactions/{id}` | Xóa quy tắc định kỳ |
 
-### 7. Saving Goals & Contributions (`/saving-goals`)
+### 8. Saving Goals & Contributions (`/saving-goals`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/saving-goals` | Lấy danh sách mục tiêu tiết kiệm (lọc theo `status`) |
@@ -269,7 +291,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `DELETE`| `/saving-goals/{id}/contributions/{contributionId}` | Hủy 1 lần đóng góp (tự động hoàn tác số dư mục tiêu & tài khoản ví) |
 | `DELETE`| `/saving-goals/{id}` | Xóa mục tiêu tiết kiệm và toàn bộ lịch sử đóng góp liên quan |
 
-### 8. Debt Management - Sổ nợ (`/debts`)
+### 9. Debt Management - Sổ nợ (`/debts`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/debts` | Lấy danh sách khoản nợ (lọc theo `type`: 1-Đi vay, 2-Cho vay và `status`) |
@@ -281,7 +303,14 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `DELETE`| `/debts/{id}/payments/{paymentId}` | Hủy 1 lần trả tiền (hoàn tác số dư nợ & ví) |
 | `DELETE`| `/debts/{id}` | Xóa khoản nợ khỏi hệ thống (chỉ xóa khi đã thanh toán hết) |
 
-### 9. Reports & Analytics (`/reports`)
+### 10. Currency Exchange (`/currency-exchange`)
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| `GET` | `/currency-exchange/latest` | Lấy tỷ giá USD/VND hiện hành đang áp dụng |
+| `GET` | `/currency-exchange/history` | Lấy danh sách lịch sử tỷ giá USD/VND theo ngày |
+| `POST` | `/currency-exchange/sync` | Kích hoạt đồng bộ tỷ giá ngoại tệ trực tuyến thủ công |
+
+### 11. Reports & Analytics (`/reports`)
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/reports/chart?startDate={yyMMdd}&endDate={yyMMdd}` | Lấy dữ liệu biểu đồ theo khoảng ngày |
@@ -312,6 +341,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `8` | Housing (Nhà ở) | Expense |
 | `9` | Debt (Trả nợ) | Expense |
 | `10`| Other Expense (Chi tiêu khác) | Expense |
+| `18`| Traveling (Du lịch) | Expense |
 | `11`| Salary (Tiền lương) | Income |
 | `12`| Business (Kinh doanh) | Income |
 | `13`| Investments (Đầu tư) | Income |
@@ -323,11 +353,23 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 ### 2. Loại Giao dịch (`TransactionType`)
 | ID | Mã loại | Mô tả |
 |---|---|---|
+| `0` | `EXPENSE` | Chi tiêu (Trừ tiền từ ví) |
 | `1` | `INCOME` | Thu nhập (Cộng tiền vào ví) |
-| `2` | `EXPENSE` | Chi tiêu (Trừ tiền từ ví) |
-| `3` | `TRANSFER` | Chuyển khoản nội bộ giữa 2 ví |
+| `2` | `TRANSFER` | Chuyển khoản nội bộ giữa 2 ví |
 
-### 3. Loại Tài khoản (`AccountType`)
+### 3. Trạng thái hoạt động (`Status`)
+| ID | Mã trạng thái | Mô tả | Áp dụng cho |
+|---|---|---|---|
+| `1` | `ACTIVE` | Hoạt động / Kích hoạt | Tài khoản, Người dùng, Giao dịch định kỳ |
+| `2` | `INACTIVE` | Tạm dừng / Vô hiệu hóa | Tài khoản, Người dùng, Giao dịch định kỳ |
+
+### 4. Vai trò người dùng (`Role`)
+| ID | Mã vai trò | Mô tả |
+|---|---|---|
+| `1` | `ADMIN` | Quản trị viên hệ thống |
+| `2` | `USER` | Người dùng thông thường |
+
+### 5. Loại Tài khoản (`AccountType`)
 | ID | Mã loại | Mô tả |
 |---|---|---|
 | `1` | `CASH` | Tiền mặt |
@@ -338,13 +380,13 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
 | `6` | `SAVINGS` | Sổ tiết kiệm |
 | `7` | `OTHER` | Khác |
 
-### 4. Tiền tệ (`Currency`)
+### 6. Tiền tệ (`Currency`)
 | ID | Mã tiền tệ |
 |---|---|
 | `0` | `USD` |
 | `1` | `VND` |
 
-### 5. Sổ nợ (`DebtType` & `DebtStatus`)
+### 7. Sổ nợ (`DebtType` & `DebtStatus`)
 * **Loại nợ (`DebtType`)**:
   - `1`: `BORROW` (Đi vay - Nợ phải trả)
   - `2`: `LEND` (Cho vay - Nợ phải thu)
@@ -353,7 +395,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
   - `2`: `PAID` (Đã tất toán / Đã trả xong)
   - `3`: `OVERDUE` (Quá hạn thanh toán)
 
-### 6. Mục tiêu tiết kiệm (`SavingGoalStatus` & `SavingContributionType`)
+### 8. Mục tiêu tiết kiệm (`SavingGoalStatus` & `SavingContributionType`)
 * **Trạng thái mục tiêu (`SavingGoalStatus`)**:
   - `1`: `IN_PROGRESS` (Đang thực hiện)
   - `2`: `COMPLETED` (Đã hoàn thành đạt $\ge 100\%$)
@@ -362,7 +404,7 @@ Tất cả các API trả về theo chuẩn cấu trúc `AbstractResponse<T>`:
   - `1`: `DEPOSIT` (Nạp tiền / Góp quỹ)
   - `2`: `WITHDRAW` (Rút tiền từ quỹ)
 
-### 7. Chu kỳ Giao dịch định kỳ (`RecurrenceType`)
+### 9. Chu kỳ Giao dịch định kỳ (`RecurrenceType`)
 | ID | Chu kỳ | Mô tả |
 |---|---|---|
 | `1` | `DAILY` | Hàng ngày |
