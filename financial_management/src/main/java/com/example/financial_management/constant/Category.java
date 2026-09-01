@@ -12,6 +12,7 @@ public class Category {
     public static final int HOUSING = 8;
     public static final int DEBT = 9;
     public static final int OTHER_EXPENSE = 10;
+    public static final int TRAVELING = 18;
 
     // Income Categories
     public static final int SALARY = 11;
@@ -28,6 +29,14 @@ public class Category {
 
     private Category() {
         // Utility class
+    }
+
+    public static boolean isExpense(int categoryId) {
+        return (categoryId >= FOOD && categoryId <= OTHER_EXPENSE) || categoryId == TRAVELING;
+    }
+
+    public static boolean isIncome(int categoryId) {
+        return categoryId >= SALARY && categoryId <= OTHER_INCOME;
     }
 
     public static String getName(int categoryId) {
@@ -52,6 +61,8 @@ public class Category {
                 return "Debt";
             case OTHER_EXPENSE:
                 return "Other Expense";
+            case TRAVELING:
+                return "Traveling";
             case SALARY:
                 return "Salary";
             case BUSINESS:

@@ -410,11 +410,11 @@ public class TransactionService {
 
     private void validateCategory(int type, int category) {
         if (type == TransactionType.EXPENSE) {
-            if (category < Category.FOOD || category > Category.OTHER_EXPENSE) {
+            if (!Category.isExpense(category)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid category for EXPENSE transaction");
             }
         } else if (type == TransactionType.INCOME) {
-            if (category < Category.SALARY || category > Category.OTHER_INCOME) {
+            if (!Category.isIncome(category)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid category for INCOME transaction");
             }
         } else if (type == TransactionType.TRANSFER) {
