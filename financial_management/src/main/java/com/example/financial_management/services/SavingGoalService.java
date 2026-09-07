@@ -422,6 +422,20 @@ public class SavingGoalService {
                 .orElseThrow(
                         () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy mục tiêu tiết kiệm"));
 
+        if (savingGoal.getCurrentAmount() != null && savingGoal.getCurrentAmount().compareTo(BigDecimal.ZERO) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể xóa mục tiêu tiết kiệm khi vẫn còn số dư (" + savingGoal.getCurrentAmount()
+                            + " đ). Vui lòng rút hết tiền về tài khoản ví trước khi xóa.");
+        }
+
+        List<SavingGoalContribution> contributions = savingGoalContributionRepository
+                .findAllBySavingGoalIdOrderByContributionDateDesc(id);
+        for (SavingGoalContribution c : contributions) {
+            if (c.getTransactionId() != null) {
+                transactionRepository.deleteById(c.getTransactionId());
+            }
+        }
+
         savingGoalContributionRepository.deleteAllBySavingGoalId(id);
         savingGoalRepository.delete(savingGoal);
         return true;

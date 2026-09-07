@@ -152,11 +152,24 @@ public class ReportService {
                                 user.getId(), start, end, request.getAccountId());
 
                 List<DailyReportResponseItem> items = rows.stream()
-                                .map(row -> new DailyReportResponseItem(
-                                                ((java.sql.Date) row[0]).toLocalDate(),
-                                                UUID.fromString((String) row[1]),
-                                                (BigDecimal) row[2],
-                                                (BigDecimal) row[3]))
+                                .map(row -> {
+                                        UUID accountId = null;
+                                        if (row[1] != null) {
+                                                if (row[1] instanceof UUID) {
+                                                        accountId = (UUID) row[1];
+                                                } else {
+                                                        accountId = UUID.fromString(row[1].toString());
+                                                }
+                                        }
+                                        LocalDate date = row[0] instanceof java.sql.Date
+                                                        ? ((java.sql.Date) row[0]).toLocalDate()
+                                                        : LocalDate.parse(row[0].toString());
+                                        return new DailyReportResponseItem(
+                                                        date,
+                                                        accountId,
+                                                        (BigDecimal) row[2],
+                                                        (BigDecimal) row[3]);
+                                })
                                 .toList();
 
                 // Tính tổng income và expense
@@ -409,9 +422,30 @@ public class ReportService {
                 return summary;
         }
 
+        private BaseFont getUnicodeBaseFont() {
+                try {
+                        return BaseFont.createFont("C:/Windows/Fonts/arial.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                } catch (Exception e) {
+                        try {
+                                return BaseFont.createFont("C:/Windows/Fonts/times.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                        } catch (Exception ex) {
+                                try {
+                                        return BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+                                } catch (Exception ex2) {
+                                        throw new RuntimeException("Error initializing PDF font", ex2);
+                                }
+                        }
+                }
+        }
+
         // --- Private helper để tạo file PDF ---
         private byte[] buildMonthlyReportByMonthPDF(ReportRequest request, Auth auth) {
                 DailyReportResponse data = getDailyReport(request, auth);
+                BaseFont baseFont = getUnicodeBaseFont();
+                Font titleFont = new Font(baseFont, 16, Font.BOLD);
+                Font contentFont = new Font(baseFont, 10, Font.NORMAL);
+                Font summaryFont = new Font(baseFont, 12, Font.BOLD);
+                Font headerFont = new Font(baseFont, 11, Font.BOLD);
 
                 try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                         Document doc = new Document(PageSize.A4);
@@ -419,8 +453,7 @@ public class ReportService {
                         doc.open();
 
                         // --- Tiêu đề ---
-                        Font titleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
-                        Paragraph title = new Paragraph("Monthly Report - " + request.getMonth(), titleFont);
+                        Paragraph title = new Paragraph("Báo cáo tháng - " + request.getMonth(), titleFont);
                         title.setAlignment(Element.ALIGN_CENTER);
                         doc.add(title);
                         doc.add(Chunk.NEWLINE);
@@ -428,20 +461,19 @@ public class ReportService {
                         // --- Bảng dữ liệu ---
                         PdfPTable table = new PdfPTable(3);
                         table.setWidthPercentage(100);
-                        addTableHeader(table, new String[] { "Date", "Income", "Expense" });
+                        addTableHeader(table, new String[] { "Ngày", "Thu nhập", "Chi tiêu" }, headerFont);
 
                         for (DailyReportResponseItem item : data.getItems()) {
-                                table.addCell(item.getDate().toString());
-                                table.addCell(formatMoney(item.getIncome()));
-                                table.addCell(formatMoney(item.getExpense()));
+                                table.addCell(new Phrase(item.getDate().toString(), contentFont));
+                                table.addCell(new Phrase(formatMoney(item.getIncome()), contentFont));
+                                table.addCell(new Phrase(formatMoney(item.getExpense()), contentFont));
                         }
 
                         doc.add(table);
                         doc.add(Chunk.NEWLINE);
 
                         // --- Tổng kết ---
-                        Font summaryFont = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD);
-                        Paragraph summaryTitle = new Paragraph("Summary", summaryFont);
+                        Paragraph summaryTitle = new Paragraph("Tổng kết", summaryFont);
                         summaryTitle.setAlignment(Element.ALIGN_LEFT);
                         doc.add(summaryTitle);
                         doc.add(Chunk.NEWLINE);
@@ -451,9 +483,9 @@ public class ReportService {
                         summaryTable.setHorizontalAlignment(Element.ALIGN_LEFT);
                         summaryTable.setWidths(new float[] { 3, 2 });
 
-                        addSummaryRow(summaryTable, "Total Income:", data.getTotalIncome().toString());
-                        addSummaryRow(summaryTable, "Total Expense:", data.getTotalExpense().toString());
-                        addSummaryRow(summaryTable, "Net:", data.getNet().toString());
+                        addSummaryRow(summaryTable, "Tổng thu nhập:", formatMoney(data.getTotalIncome()), contentFont);
+                        addSummaryRow(summaryTable, "Tổng chi tiêu:", formatMoney(data.getTotalExpense()), contentFont);
+                        addSummaryRow(summaryTable, "Số dư ròng (Net):", formatMoney(data.getNet()), summaryFont);
 
                         doc.add(summaryTable);
 
@@ -466,21 +498,25 @@ public class ReportService {
 
         private byte[] buildMonthlyReportByYearPDF(MonthlyReportRequest request, Auth auth) {
                 MonthlyReportResponse data = getMonthlyReport(request, auth);
+                BaseFont baseFont = getUnicodeBaseFont();
+                Font titleFont = new Font(baseFont, 16, Font.BOLD);
+                Font contentFont = new Font(baseFont, 10, Font.NORMAL);
+                Font summaryFont = new Font(baseFont, 12, Font.BOLD);
+                Font headerFont = new Font(baseFont, 11, Font.BOLD);
 
                 try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                         Document doc = new Document(PageSize.A4);
                         PdfWriter.getInstance(doc, out);
                         doc.open();
 
-                        Font titleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
-                        Paragraph title = new Paragraph("Yearly Report - " + request.getYear(), titleFont);
+                        Paragraph title = new Paragraph("Báo cáo năm - " + request.getYear(), titleFont);
                         title.setAlignment(Element.ALIGN_CENTER);
                         doc.add(title);
                         doc.add(Chunk.NEWLINE);
 
                         PdfPTable table = new PdfPTable(4);
                         table.setWidthPercentage(100);
-                        addTableHeader(table, new String[] { "Month", "Income", "Expense", "Net" });
+                        addTableHeader(table, new String[] { "Tháng", "Thu nhập", "Chi tiêu", "Net" }, headerFont);
 
                         // Biến cộng dồn
                         BigDecimal totalIncome = BigDecimal.ZERO;
@@ -488,10 +524,10 @@ public class ReportService {
                         BigDecimal totalNet = BigDecimal.ZERO;
 
                         for (MonthlyReportResponseItem item : data.getItems()) {
-                                table.addCell(item.getMonth());
-                                table.addCell(formatMoney(item.getIncome()));
-                                table.addCell(formatMoney(item.getExpense()));
-                                table.addCell(formatMoney(item.getNet()));
+                                table.addCell(new Phrase(String.valueOf(item.getMonth()), contentFont));
+                                table.addCell(new Phrase(formatMoney(item.getIncome()), contentFont));
+                                table.addCell(new Phrase(formatMoney(item.getExpense()), contentFont));
+                                table.addCell(new Phrase(formatMoney(item.getNet()), contentFont));
 
                                 totalIncome = totalIncome.add(item.getIncome());
                                 totalExpense = totalExpense.add(item.getExpense());
@@ -499,14 +535,13 @@ public class ReportService {
                         }
 
                         // Thêm dòng tổng cuối bảng
-                        Font boldFont = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD);
-                        PdfPCell totalCell = new PdfPCell(new Phrase("TOTAL", boldFont));
+                        PdfPCell totalCell = new PdfPCell(new Phrase("TỔNG CỘNG", summaryFont));
                         totalCell.setColspan(1);
                         totalCell.setHorizontalAlignment(Element.ALIGN_CENTER);
                         table.addCell(totalCell);
-                        table.addCell(new Phrase(totalIncome.toString(), boldFont));
-                        table.addCell(new Phrase(totalExpense.toString(), boldFont));
-                        table.addCell(new Phrase(totalNet.toString(), boldFont));
+                        table.addCell(new Phrase(formatMoney(totalIncome), summaryFont));
+                        table.addCell(new Phrase(formatMoney(totalExpense), summaryFont));
+                        table.addCell(new Phrase(formatMoney(totalNet), summaryFont));
 
                         doc.add(table);
                         doc.close();
@@ -518,20 +553,20 @@ public class ReportService {
         }
 
         // Helper method: thêm dòng tổng kết
-        private void addSummaryRow(PdfPTable table, String label, String value) {
-                PdfPCell labelCell = new PdfPCell(new Phrase(label));
+        private void addSummaryRow(PdfPTable table, String label, String value, Font font) {
+                PdfPCell labelCell = new PdfPCell(new Phrase(label, font));
                 labelCell.setBackgroundColor(BaseColor.LIGHT_GRAY);
                 labelCell.setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.addCell(labelCell);
 
-                PdfPCell valueCell = new PdfPCell(new Phrase(value));
+                PdfPCell valueCell = new PdfPCell(new Phrase(value, font));
                 valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
                 table.addCell(valueCell);
         }
 
-        private void addTableHeader(PdfPTable table, String[] headers) {
+        private void addTableHeader(PdfPTable table, String[] headers, Font font) {
                 for (String header : headers) {
-                        PdfPCell cell = new PdfPCell(new Phrase(header));
+                        PdfPCell cell = new PdfPCell(new Phrase(header, font));
                         cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
                         cell.setHorizontalAlignment(Element.ALIGN_CENTER);
                         table.addCell(cell);
@@ -559,7 +594,7 @@ public class ReportService {
 
         private User getUser(Auth auth) {
                 return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         }
 
         private void validateAccountAccess(Auth auth, UUID accountId) {
@@ -583,7 +618,7 @@ public class ReportService {
                 try {
                         return YearMonth.parse(monthStr, formatter);
                 } catch (DateTimeParseException e) {
-                        throw new RuntimeException("Invalid month format, expected MM-yyyy or M-yyyy");
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid month format, expected MM-yyyy or M-yyyy");
                 }
         }
 

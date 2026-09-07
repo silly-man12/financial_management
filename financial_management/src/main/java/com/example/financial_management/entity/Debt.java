@@ -49,4 +49,7 @@ public class Debt extends EntityBase {
 
     @Column(name = "note", length = 255, columnDefinition = "nvarchar(255)")
     private String note;
+
+    @Column(name = "transaction_id", columnDefinition = "uniqueidentifier")
+    private UUID transactionId;
 }

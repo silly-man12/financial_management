@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -30,7 +31,14 @@ public class CurrencyExchangeService {
 
     private final CurrencyExchangeRepository currencyExchangeRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
+
+    private static RestTemplate createRestTemplateWithTimeouts() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000); // 3s
+        factory.setReadTimeout(5000);    // 5s
+        return new RestTemplate(factory);
+    }
 
     private static final BigDecimal DEFAULT_USD_VND_RATE = BigDecimal.valueOf(25450.00);
     private static final String API_URL = "https://open.er-api.com/v6/latest/USD";
@@ -44,11 +52,15 @@ public class CurrencyExchangeService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        // Tự động kiểm tra và sync tỷ giá hôm nay khi ứng dụng khởi động thành công
-        LocalDate today = LocalDate.now();
-        if (!currencyExchangeRepository.existsByFromCurrencyAndToCurrencyAndExchangeDate(
-                Currency.USD, Currency.VND, today)) {
-            syncDailyRate();
+        try {
+            // Tự động kiểm tra và sync tỷ giá hôm nay khi ứng dụng khởi động thành công
+            LocalDate today = LocalDate.now();
+            if (!currencyExchangeRepository.existsByFromCurrencyAndToCurrencyAndExchangeDate(
+                    Currency.USD, Currency.VND, today)) {
+                syncDailyRate();
+            }
+        } catch (Exception e) {
+            log.warn("Không thể đồng bộ tỷ giá ngoại tệ khi khởi động: {}. Hệ thống sẽ sử dụng tỷ giá hiện có.", e.getMessage());
         }
     }
 

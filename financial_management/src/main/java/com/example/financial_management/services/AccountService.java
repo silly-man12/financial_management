@@ -55,6 +55,7 @@ public class AccountService {
                 : BigDecimal.ZERO;
 
         account.setBalance(initial);
+        account.setVersion(0L);
 
         Account saved = accountRepository.save(account);
 
@@ -134,6 +135,13 @@ public class AccountService {
             BigDecimal delta = calculateFinalDelta(oldTransaction, newTransaction);
             applyDelta(newAccount, delta);
             return;
+        }
+
+        if (oldAccount.getVersion() == null) {
+            oldAccount.setVersion(0L);
+        }
+        if (newAccount.getVersion() == null) {
+            newAccount.setVersion(0L);
         }
 
         // Hoàn tác giao dịch cũ trên tài khoản cũ
@@ -225,6 +233,9 @@ public class AccountService {
     }
 
     public void applyDelta(Account account, BigDecimal delta) {
+        if (account.getVersion() == null) {
+            account.setVersion(0L);
+        }
         BigDecimal newBalance = account.getBalance().add(delta);
 
         if (newBalance.compareTo(BigDecimal.ZERO) < 0) {

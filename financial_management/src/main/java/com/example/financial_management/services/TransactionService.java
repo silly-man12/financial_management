@@ -17,6 +17,7 @@ import com.example.financial_management.model.transaction.TransactionSpecificati
 import com.example.financial_management.model.transaction.TransactionUpdateResponse;
 import com.example.financial_management.model.transaction.TransferRequest;
 import com.example.financial_management.repository.DebtPaymentRepository;
+import com.example.financial_management.repository.DebtRepository;
 import com.example.financial_management.repository.SavingGoalContributionRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
@@ -54,6 +55,7 @@ public class TransactionService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final DebtPaymentRepository debtPaymentRepository;
+    private final DebtRepository debtRepository;
     private final SavingGoalContributionRepository savingGoalContributionRepository;
     private final CurrencyExchangeService currencyExchangeService;
     private final TagService tagService;
@@ -168,6 +170,11 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse createTransaction(TransactionRequest request, Auth auth, MultipartFile file) {
+        if (request.getType() == TransactionType.TRANSFER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Vui lòng sử dụng API chuyển tiền riêng (/transactions/transfer) để thực hiện giao dịch chuyển khoản.");
+        }
+
         Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
         validateCurrency(request.getCurrency(), account);
@@ -209,8 +216,12 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
-        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
-        if (debtPaymentRepository.existsByTransactionId(transactionId)) {
+        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Chuyển tiền, Quản lý nợ hoặc Mục tiêu tiết kiệm
+        if (transaction.getTransferId() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể chỉnh sửa trực tiếp giao dịch chuyển tiền. Vui lòng hủy giao dịch và tạo lại nếu cần.");
+        }
+        if (debtPaymentRepository.existsByTransactionId(transactionId) || debtRepository.existsByTransactionId(transactionId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để cập nhật hoặc hủy.");
         }
@@ -276,13 +287,32 @@ public class TransactionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
         // Ràng buộc toàn vẹn: Không cho phép xóa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
-        if (debtPaymentRepository.existsByTransactionId(transaction.getId())) {
+        if (debtPaymentRepository.existsByTransactionId(transaction.getId()) || debtRepository.existsByTransactionId(transaction.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để hủy lần thanh toán này.");
+                    "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để hủy lần thanh toán hoặc khoản nợ này.");
         }
         if (savingGoalContributionRepository.existsByTransactionId(transaction.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Mục tiêu tiết kiệm. Vui lòng vào mục Tiết kiệm để hủy lần đóng góp này.");
+        }
+
+        // Nếu là giao dịch chuyển tiền (có transferId) -> Hoàn tác đồng bộ cả 2 ví và xóa cả cặp giao dịch
+        if (transaction.getTransferId() != null) {
+            List<Transaction> transferPair = transactionRepository.findAllByTransferId(transaction.getTransferId());
+            for (Transaction t : transferPair) {
+                if (t.getAccountId() != null) {
+                    Account acc = accountService.validateAccount(t.getAccountId(), auth, Status.ACTIVE);
+                    BigDecimal delta = t.getType() == TransactionType.INCOME
+                            ? t.getAmount()
+                            : t.getAmount().negate();
+                    accountService.applyDelta(acc, delta.negate());
+                }
+                if (t.getImagePath() != null) {
+                    deleteImage(t.getImagePath());
+                }
+                transactionRepository.delete(t);
+            }
+            return true;
         }
 
         Account account = accountService.validateAccount(transaction.getAccountId(), auth, Status.ACTIVE);
@@ -328,6 +358,8 @@ public class TransactionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must have the same currency");
         }
 
+        UUID transferId = UUID.randomUUID();
+
         Transaction sourceTransaction = buildTransferTransaction(
                 user.getId(),
                 sourceAccount.getId(),
@@ -335,7 +367,8 @@ public class TransactionService {
                 TransactionType.EXPENSE,
                 request.getDescription(),
                 request.getCreateAt(),
-                sourceAccount.getCurrency());
+                sourceAccount.getCurrency(),
+                transferId);
 
         Transaction targetTransaction = buildTransferTransaction(
                 user.getId(),
@@ -344,7 +377,8 @@ public class TransactionService {
                 TransactionType.INCOME,
                 request.getDescription(),
                 request.getCreateAt(),
-                targetAccount.getCurrency());
+                targetAccount.getCurrency(),
+                transferId);
 
         accountService.applyDelta(sourceAccount, request.getAmount().negate());
         accountService.applyDelta(targetAccount, request.getAmount());
@@ -362,7 +396,8 @@ public class TransactionService {
             Integer transactionType,
             String description,
             LocalDateTime createdAt,
-            int currency) {
+            int currency,
+            UUID transferId) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setAccountId(accountId);
@@ -372,6 +407,7 @@ public class TransactionService {
         transaction.setCurrency(currency);
         transaction.setDescription(description);
         transaction.setCreatedAt(createdAt);
+        transaction.setTransferId(transferId);
         return transaction;
     }
 

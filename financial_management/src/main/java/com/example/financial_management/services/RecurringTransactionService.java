@@ -21,6 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -39,6 +42,7 @@ public class RecurringTransactionService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final CurrencyExchangeService currencyExchangeService;
+    private final PlatformTransactionManager transactionManager;
 
     private RecurringTransactionResponse toEnrichedResponse(RecurringTransaction entity) {
         RecurringTransactionResponse response = recurringTransactionMapper.toResponse(entity);
@@ -174,20 +178,24 @@ public class RecurringTransactionService {
     /**
      * Tự động quét và thực thi các giao dịch định kỳ đến hạn (dành cho Cronjob hàng ngày)
      */
-    @Transactional
     public void executeAllDue() {
         LocalDate today = LocalDate.now();
         List<RecurringTransaction> dueList = recurringTransactionRepository
                 .findAllByStatusAndNextExecutionDateLessThanEqual(Status.ACTIVE, today);
 
         log.info("Cronjob quét thấy {} giao dịch định kỳ đến hạn xử lý", dueList.size());
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
         for (RecurringTransaction recurring : dueList) {
             try {
-                createTransactionFromRecurring(recurring);
-                advanceNextExecutionDate(recurring);
-                recurringTransactionRepository.saveAndFlush(recurring);
+                txTemplate.executeWithoutResult(status -> {
+                    createTransactionFromRecurring(recurring);
+                    advanceNextExecutionDate(recurring);
+                    recurringTransactionRepository.saveAndFlush(recurring);
+                });
             } catch (Exception e) {
-                log.error("Lỗi khi tự động thực thi recurring transaction id={}", recurring.getId(), e);
+                log.error("Lỗi khi tự động thực thi recurring transaction id={}: {}", recurring.getId(), e.getMessage(), e);
             }
         }
     }
