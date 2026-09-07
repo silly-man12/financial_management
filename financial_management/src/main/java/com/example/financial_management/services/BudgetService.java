@@ -150,7 +150,7 @@ public class BudgetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found"));
 
         if (!budget.getUserId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized access to this budget");
         }
 
         return toEnrichedResponse(budget);
@@ -192,7 +192,7 @@ public class BudgetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found"));
 
         if (!budget.getUserId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized access to this budget");
         }
 
         budget.setCategory(request.getCategory());
@@ -225,7 +225,7 @@ public class BudgetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found"));
 
         if (!budget.getUserId().equals(user.getId())) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized access to this budget");
         }
 
         budgetRepository.delete(budget);

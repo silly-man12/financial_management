@@ -137,18 +137,23 @@ public class DebtService {
         if (request.getAccountId() != null) {
             Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
+            Transaction tx = null;
             if (request.getType() == DebtType.BORROW) {
                 // Đi vay -> Nhận tiền vào ví (tăng số dư) -> INCOME
                 accountService.applyDelta(account, request.getInitialAmount());
-                recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
+                tx = recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
                         TransactionType.INCOME, account.getCurrency(),
                         "Đi vay từ: " + request.getPersonName());
             } else if (request.getType() == DebtType.LEND) {
                 // Cho vay -> Xuất tiền từ ví (giảm số dư) -> EXPENSE
                 accountService.applyDelta(account, request.getInitialAmount().negate());
-                recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
+                tx = recordDebtTransaction(user.getId(), account.getId(), request.getInitialAmount(),
                         TransactionType.EXPENSE, account.getCurrency(),
                         "Cho vay: " + request.getPersonName());
+            }
+            if (tx != null) {
+                debt.setTransactionId(tx.getId());
+                saved = debtRepository.save(debt);
             }
         }
 
@@ -205,7 +210,19 @@ public class DebtService {
         }
 
         // 3. Đã tất toán do tự thanh toán hết -> Cho phép xóa
+        // Xóa sạch các transaction tương ứng để tránh bị mồ côi (orphaned)
+        List<DebtPayment> payments = debtPaymentRepository.findAllByDebtIdOrderByPaymentDateDesc(id);
+        for (DebtPayment p : payments) {
+            if (p.getTransactionId() != null) {
+                transactionRepository.deleteById(p.getTransactionId());
+            }
+        }
         debtPaymentRepository.deleteAllByDebtId(id);
+
+        if (debt.getTransactionId() != null) {
+            transactionRepository.deleteById(debt.getTransactionId());
+        }
+
         debtRepository.delete(debt);
         log.info("Đã xóa vĩnh viễn khoản nợ id={} khỏi hệ thống (khoản nợ đã tự thanh toán xong)", id);
         return true;

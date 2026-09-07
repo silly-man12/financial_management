@@ -17,6 +17,7 @@ import com.example.financial_management.model.transaction.TransactionSpecificati
 import com.example.financial_management.model.transaction.TransactionUpdateResponse;
 import com.example.financial_management.model.transaction.TransferRequest;
 import com.example.financial_management.repository.DebtPaymentRepository;
+import com.example.financial_management.repository.DebtRepository;
 import com.example.financial_management.repository.SavingGoalContributionRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
@@ -41,6 +42,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -54,6 +57,7 @@ public class TransactionService {
     private final UserRepository userRepository;
     private final AccountService accountService;
     private final DebtPaymentRepository debtPaymentRepository;
+    private final DebtRepository debtRepository;
     private final SavingGoalContributionRepository savingGoalContributionRepository;
     private final CurrencyExchangeService currencyExchangeService;
     private final TagService tagService;
@@ -135,9 +139,21 @@ public class TransactionService {
 
     public TransactionResponse getById(UUID id, Auth auth) {
         User user = getUser(auth);
-        return transactionRepository.findByIdAndUserId(id, user.getId())
-                .map(this::toEnrichedResponse)
+        Transaction transaction = transactionRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        TransactionResponse response = toEnrichedResponse(transaction);
+        if (transaction.getTransferId() != null) {
+            List<Transaction> transferPair = transactionRepository.findAllByTransferId(transaction.getTransferId());
+            for (Transaction partner : transferPair) {
+                if (!partner.getId().equals(transaction.getId())) {
+                    response.setTargetAccountId(partner.getAccountId());
+                    response.setTargetTransactionId(partner.getId());
+                    break;
+                }
+            }
+        }
+        return response;
     }
 
     public PageResponse<TransactionResponse> getTransactionByAccount(UUID accountId, Auth auth, Pageable pageable) {
@@ -168,6 +184,11 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse createTransaction(TransactionRequest request, Auth auth, MultipartFile file) {
+        if (request.getType() == TransactionType.TRANSFER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Vui lòng sử dụng API chuyển tiền riêng (/transactions/transfer) để thực hiện giao dịch chuyển khoản.");
+        }
+
         Account account = accountService.validateAccount(request.getAccountId(), auth, Status.ACTIVE);
 
         validateCurrency(request.getCurrency(), account);
@@ -209,8 +230,12 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findByIdAndUserId(transactionId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
-        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
-        if (debtPaymentRepository.existsByTransactionId(transactionId)) {
+        // Ràng buộc toàn vẹn: Không cho phép chỉnh sửa trực tiếp giao dịch sinh ra từ Chuyển tiền, Quản lý nợ hoặc Mục tiêu tiết kiệm
+        if (transaction.getTransferId() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể chỉnh sửa trực tiếp giao dịch chuyển tiền. Vui lòng hủy giao dịch và tạo lại nếu cần.");
+        }
+        if (debtPaymentRepository.existsByTransactionId(transactionId) || debtRepository.existsByTransactionId(transactionId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để cập nhật hoặc hủy.");
         }
@@ -276,13 +301,34 @@ public class TransactionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found or access denied"));
 
         // Ràng buộc toàn vẹn: Không cho phép xóa trực tiếp giao dịch sinh ra từ Quản lý nợ hoặc Mục tiêu tiết kiệm
-        if (debtPaymentRepository.existsByTransactionId(transaction.getId())) {
+        if (debtPaymentRepository.existsByTransactionId(transaction.getId()) || debtRepository.existsByTransactionId(transaction.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để hủy lần thanh toán này.");
+                    "Giao dịch này được tạo tự động từ Quản lý nợ. Vui lòng vào mục Quản lý nợ để hủy lần thanh toán hoặc khoản nợ này.");
         }
         if (savingGoalContributionRepository.existsByTransactionId(transaction.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Giao dịch này được tạo tự động từ Mục tiêu tiết kiệm. Vui lòng vào mục Tiết kiệm để hủy lần đóng góp này.");
+        }
+
+        // Nếu là giao dịch chuyển tiền (có transferId) -> Hoàn tác đồng bộ cả 2 ví và xóa cả cặp giao dịch
+        if (transaction.getTransferId() != null) {
+            List<Transaction> transferPair = new ArrayList<>(transactionRepository.findAllByTransferId(transaction.getTransferId()));
+            // Sắp xếp theo UUID của accountId để luôn áp dụng delta / khóa tài khoản theo thứ tự cố định, tránh deadlock
+            transferPair.sort(Comparator.comparing(Transaction::getAccountId));
+            for (Transaction t : transferPair) {
+                if (t.getAccountId() != null) {
+                    Account acc = accountService.validateAccount(t.getAccountId(), auth, Status.ACTIVE);
+                    BigDecimal delta = t.getType() == TransactionType.INCOME
+                            ? t.getAmount()
+                            : t.getAmount().negate();
+                    accountService.applyDelta(acc, delta.negate());
+                }
+                if (t.getImagePath() != null) {
+                    deleteImage(t.getImagePath());
+                }
+                transactionRepository.delete(t);
+            }
+            return true;
         }
 
         Account account = accountService.validateAccount(transaction.getAccountId(), auth, Status.ACTIVE);
@@ -328,6 +374,13 @@ public class TransactionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must have the same currency");
         }
 
+        // Kiểm tra số dư tài khoản nguồn trước khi chuyển
+        if (sourceAccount.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance in source account");
+        }
+
+        UUID transferId = UUID.randomUUID();
+
         Transaction sourceTransaction = buildTransferTransaction(
                 user.getId(),
                 sourceAccount.getId(),
@@ -335,7 +388,8 @@ public class TransactionService {
                 TransactionType.EXPENSE,
                 request.getDescription(),
                 request.getCreateAt(),
-                sourceAccount.getCurrency());
+                sourceAccount.getCurrency(),
+                transferId);
 
         Transaction targetTransaction = buildTransferTransaction(
                 user.getId(),
@@ -344,15 +398,27 @@ public class TransactionService {
                 TransactionType.INCOME,
                 request.getDescription(),
                 request.getCreateAt(),
-                targetAccount.getCurrency());
+                targetAccount.getCurrency(),
+                transferId);
 
-        accountService.applyDelta(sourceAccount, request.getAmount().negate());
-        accountService.applyDelta(targetAccount, request.getAmount());
+        // Chống Deadlock: Luôn cập nhật và khóa tài khoản theo thứ tự UUID cố định
+        if (sourceAccount.getId().compareTo(targetAccount.getId()) < 0) {
+            accountService.applyDelta(sourceAccount, request.getAmount().negate());
+            accountService.applyDelta(targetAccount, request.getAmount());
+        } else {
+            accountService.applyDelta(targetAccount, request.getAmount());
+            accountService.applyDelta(sourceAccount, request.getAmount().negate());
+        }
 
         Transaction savedSourceTransaction = transactionRepository.save(sourceTransaction);
-        transactionRepository.save(targetTransaction);
+        Transaction savedTargetTransaction = transactionRepository.save(targetTransaction);
 
-        return toEnrichedResponse(savedSourceTransaction);
+        TransactionResponse response = toEnrichedResponse(savedSourceTransaction);
+        response.setTargetAccountId(targetAccount.getId());
+        response.setTargetTransactionId(savedTargetTransaction.getId());
+        response.setTransferId(transferId);
+
+        return response;
     }
 
     private Transaction buildTransferTransaction(
@@ -362,7 +428,8 @@ public class TransactionService {
             Integer transactionType,
             String description,
             LocalDateTime createdAt,
-            int currency) {
+            int currency,
+            UUID transferId) {
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setAccountId(accountId);
@@ -372,6 +439,7 @@ public class TransactionService {
         transaction.setCurrency(currency);
         transaction.setDescription(description);
         transaction.setCreatedAt(createdAt);
+        transaction.setTransferId(transferId);
         return transaction;
     }
 

@@ -51,6 +51,9 @@ public class Transaction extends EntityBase {
     @Column(name = "have_image", nullable = false)
     private boolean haveImage = false;
 
+    @Column(name = "transfer_id", nullable = true, columnDefinition = "uniqueidentifier")
+    private UUID transferId;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "transaction_tags",

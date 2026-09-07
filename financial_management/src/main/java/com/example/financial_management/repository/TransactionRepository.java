@@ -269,6 +269,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             @Param("tagIds") Set<UUID> tagIds,
             @Param("month") int month,
             @Param("year") int year);
+
+    List<Transaction> findAllByTransferId(UUID transferId);
 }
 
 

@@ -19,4 +19,6 @@ public interface DebtRepository extends JpaRepository<Debt, UUID> {
     List<Debt> findAllByUserIdAndTypeAndStatusOrderByCreatedAtDesc(UUID userId, int type, int status);
 
     Optional<Debt> findByIdAndUserId(UUID id, UUID userId);
+
+    boolean existsByTransactionId(UUID transactionId);
 }
