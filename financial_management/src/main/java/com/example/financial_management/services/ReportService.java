@@ -336,7 +336,8 @@ public class ReportService {
 
         public ResponseEntity<byte[]> exportMonthlyReportByMonthPDF(ReportRequest request, Auth auth) {
                 byte[] pdf = buildMonthlyReportByMonthPDF(request, auth);
-                return buildPdfResponse(pdf, "report-" + request.getMonth() + ".pdf");
+                String safeMonth = request.getMonth() != null ? request.getMonth().trim().replace("/", "-").replace("\\", "-") : "month";
+                return buildPdfResponse(pdf, "report-" + safeMonth + ".pdf");
         }
 
         public ResponseEntity<byte[]> exportMonthlyReportByYearPDF(MonthlyReportRequest request, Auth auth) {
@@ -611,15 +612,76 @@ public class ReportService {
         }
 
         private YearMonth parseMonth(String monthStr) {
-                DateTimeFormatter formatter = new DateTimeFormatterBuilder()
-                                .appendPattern("[MM-yyyy][M-yyyy]") // có thể parse MM-yyyy hoặc M-yyyy
-                                .toFormatter();
-
-                try {
-                        return YearMonth.parse(monthStr, formatter);
-                } catch (DateTimeParseException e) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid month format, expected MM-yyyy or M-yyyy");
+                if (monthStr == null || monthStr.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tham số month không được để trống");
                 }
+                String cleanStr = monthStr.trim().replaceAll("^[\"']+|[\"']+$", "");
+
+                // Nếu là ISO datetime (ví dụ: 2026-09-07T16:26:09 hoặc có khoảng trắng giờ)
+                if (cleanStr.contains("T")) {
+                        cleanStr = cleanStr.substring(0, cleanStr.indexOf("T")).trim();
+                } else if (cleanStr.contains(" ")) {
+                        cleanStr = cleanStr.substring(0, cleanStr.indexOf(" ")).trim();
+                }
+
+                // Tự động thay thế placeholder yyyy hoặc MM nếu người dùng copy nguyên mẫu hướng dẫn
+                if (cleanStr.toLowerCase().contains("yyyy")) {
+                        cleanStr = cleanStr.replaceAll("(?i)yyyy", String.valueOf(LocalDate.now().getYear()));
+                }
+                if (cleanStr.toLowerCase().contains("mm")) {
+                        cleanStr = cleanStr.replaceAll("(?i)mm", String.format("%02d", LocalDate.now().getMonthValue()));
+                }
+
+                // 1. Thử parse trực tiếp theo YearMonth
+                String[] ymPatterns = {
+                                "MM-yyyy", "M-yyyy",
+                                "yyyy-MM", "yyyy-M",
+                                "MM/yyyy", "M/yyyy",
+                                "yyyy/MM", "yyyy/M",
+                                "MM.yyyy", "M.yyyy",
+                                "yyyy.MM", "yyyy.M",
+                                "yyyyMM"
+                };
+                for (String pattern : ymPatterns) {
+                        try {
+                                return YearMonth.parse(cleanStr, DateTimeFormatter.ofPattern(pattern));
+                        } catch (DateTimeParseException ignored) {
+                        }
+                }
+
+                // 2. Thử parse nếu client truyền cả ngày (LocalDate) ví dụ: 2026-09-07, 07/09/2026, 07-09-2026
+                String[] datePatterns = {
+                                "yyyy-MM-dd", "yyyy-M-d",
+                                "dd/MM/yyyy", "d/M/yyyy",
+                                "dd-MM-yyyy", "d-M-yyyy",
+                                "yyyy/MM/dd", "yyyy/M/d",
+                                "yyyyMMdd", "yyMMdd"
+                };
+                for (String pattern : datePatterns) {
+                        try {
+                                LocalDate d = LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern(pattern));
+                                return YearMonth.from(d);
+                        } catch (DateTimeParseException ignored) {
+                        }
+                }
+
+                // 3. Nếu là chuỗi số nguyên: ví dụ chỉ gửi tháng "9" hoặc "09"
+                if (cleanStr.matches("^\\d{1,2}$")) {
+                        int m = Integer.parseInt(cleanStr);
+                        if (m >= 1 && m <= 12) {
+                                return YearMonth.of(LocalDate.now().getYear(), m);
+                        }
+                }
+
+                // 4. Nếu gửi năm 4 chữ số: ví dụ "2026"
+                if (cleanStr.matches("^\\d{4}$")) {
+                        int y = Integer.parseInt(cleanStr);
+                        return YearMonth.of(y, LocalDate.now().getMonthValue());
+                }
+
+                log.warn("Invalid month input received: '{}'", monthStr);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                String.format("Giá trị tháng '%s' không hợp lệ. Vui lòng gửi định dạng MM-yyyy (ví dụ: '09-2026'), yyyy-MM ('2026-09'), hoặc MM/yyyy ('09/2026')", monthStr));
         }
 
         private String formatMoney(BigDecimal amount) {
