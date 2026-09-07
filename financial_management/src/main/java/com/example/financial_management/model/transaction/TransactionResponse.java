@@ -23,6 +23,9 @@ public class TransactionResponse {
     private String imagePath;
     private boolean haveImage;
     private List<TagResponse> tags;
+    private UUID transferId;
+    private UUID targetAccountId;
+    private UUID targetTransactionId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

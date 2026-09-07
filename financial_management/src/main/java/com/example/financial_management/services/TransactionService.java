@@ -42,6 +42,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -137,9 +139,21 @@ public class TransactionService {
 
     public TransactionResponse getById(UUID id, Auth auth) {
         User user = getUser(auth);
-        return transactionRepository.findByIdAndUserId(id, user.getId())
-                .map(this::toEnrichedResponse)
+        Transaction transaction = transactionRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+
+        TransactionResponse response = toEnrichedResponse(transaction);
+        if (transaction.getTransferId() != null) {
+            List<Transaction> transferPair = transactionRepository.findAllByTransferId(transaction.getTransferId());
+            for (Transaction partner : transferPair) {
+                if (!partner.getId().equals(transaction.getId())) {
+                    response.setTargetAccountId(partner.getAccountId());
+                    response.setTargetTransactionId(partner.getId());
+                    break;
+                }
+            }
+        }
+        return response;
     }
 
     public PageResponse<TransactionResponse> getTransactionByAccount(UUID accountId, Auth auth, Pageable pageable) {
@@ -298,7 +312,9 @@ public class TransactionService {
 
         // Nếu là giao dịch chuyển tiền (có transferId) -> Hoàn tác đồng bộ cả 2 ví và xóa cả cặp giao dịch
         if (transaction.getTransferId() != null) {
-            List<Transaction> transferPair = transactionRepository.findAllByTransferId(transaction.getTransferId());
+            List<Transaction> transferPair = new ArrayList<>(transactionRepository.findAllByTransferId(transaction.getTransferId()));
+            // Sắp xếp theo UUID của accountId để luôn áp dụng delta / khóa tài khoản theo thứ tự cố định, tránh deadlock
+            transferPair.sort(Comparator.comparing(Transaction::getAccountId));
             for (Transaction t : transferPair) {
                 if (t.getAccountId() != null) {
                     Account acc = accountService.validateAccount(t.getAccountId(), auth, Status.ACTIVE);
@@ -358,6 +374,11 @@ public class TransactionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must have the same currency");
         }
 
+        // Kiểm tra số dư tài khoản nguồn trước khi chuyển
+        if (sourceAccount.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance in source account");
+        }
+
         UUID transferId = UUID.randomUUID();
 
         Transaction sourceTransaction = buildTransferTransaction(
@@ -380,13 +401,24 @@ public class TransactionService {
                 targetAccount.getCurrency(),
                 transferId);
 
-        accountService.applyDelta(sourceAccount, request.getAmount().negate());
-        accountService.applyDelta(targetAccount, request.getAmount());
+        // Chống Deadlock: Luôn cập nhật và khóa tài khoản theo thứ tự UUID cố định
+        if (sourceAccount.getId().compareTo(targetAccount.getId()) < 0) {
+            accountService.applyDelta(sourceAccount, request.getAmount().negate());
+            accountService.applyDelta(targetAccount, request.getAmount());
+        } else {
+            accountService.applyDelta(targetAccount, request.getAmount());
+            accountService.applyDelta(sourceAccount, request.getAmount().negate());
+        }
 
         Transaction savedSourceTransaction = transactionRepository.save(sourceTransaction);
-        transactionRepository.save(targetTransaction);
+        Transaction savedTargetTransaction = transactionRepository.save(targetTransaction);
 
-        return toEnrichedResponse(savedSourceTransaction);
+        TransactionResponse response = toEnrichedResponse(savedSourceTransaction);
+        response.setTargetAccountId(targetAccount.getId());
+        response.setTargetTransactionId(savedTargetTransaction.getId());
+        response.setTransferId(transferId);
+
+        return response;
     }
 
     private Transaction buildTransferTransaction(
