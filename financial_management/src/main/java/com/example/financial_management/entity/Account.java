@@ -24,7 +24,7 @@ import lombok.experimental.Accessors;
 public class Account extends EntityBase {
 
     @Version
-    @Column(name = "version")
+    @Column(name = "version", nullable = false)
     private Long version = 0L;
 
     @PostLoad
