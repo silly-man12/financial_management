@@ -13,7 +13,6 @@ import com.example.financial_management.model.recurring.RecurringTransactionRequ
 import com.example.financial_management.model.recurring.RecurringTransactionResponse;
 import com.example.financial_management.repository.RecurringTransactionRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +38,7 @@ public class RecurringTransactionService {
     private final RecurringTransactionRepository recurringTransactionRepository;
     private final TransactionRepository transactionRepository;
     private final RecurringTransactionMapper recurringTransactionMapper;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final AccountService accountService;
     private final CurrencyExchangeService currencyExchangeService;
     private final PlatformTransactionManager transactionManager;
@@ -332,7 +331,6 @@ public class RecurringTransactionService {
     }
 
     private User getUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 }

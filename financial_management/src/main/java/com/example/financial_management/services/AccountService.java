@@ -21,7 +21,6 @@ import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.repository.AccountRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountService {
     private final AccountRepository accountRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final AccountMapper accountMapper;
     private final TransactionRepository transactionRepository;
     private final CurrencyExchangeService currencyExchangeService;
@@ -145,47 +144,14 @@ public class AccountService {
         }
 
         // Hoàn tác giao dịch cũ trên tài khoản cũ
-        BigDecimal oldBalance = oldAccount.getBalance();
-
-        switch (oldTransaction.getType()) {
-            case TransactionType.INCOME:
-                oldBalance = oldBalance.subtract(oldTransaction.getAmount());
-                break;
-
-            case TransactionType.EXPENSE:
-            case TransactionType.TRANSFER:
-                oldBalance = oldBalance.add(oldTransaction.getAmount());
-                break;
-        }
-
-        if (oldBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance");
-        }
-
-        oldAccount.setBalance(oldBalance);
+        BigDecimal oldDelta = oldTransaction.getType() == TransactionType.INCOME
+                ? oldTransaction.getAmount()
+                : oldTransaction.getAmount().negate();
+        applyDelta(oldAccount, oldDelta.negate());
 
         // Áp dụng giao dịch mới lên tài khoản mới
-        BigDecimal newBalance = newAccount.getBalance();
-
-        switch (newTransaction.getType()) {
-            case TransactionType.INCOME:
-                newBalance = newBalance.add(newTransaction.getAmount());
-                break;
-
-            case TransactionType.EXPENSE:
-            case TransactionType.TRANSFER:
-                newBalance = newBalance.subtract(newTransaction.getAmount());
-                break;
-        }
-
-        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient balance");
-        }
-
-        newAccount.setBalance(newBalance);
-
-        accountRepository.save(oldAccount);
-        accountRepository.save(newAccount);
+        BigDecimal newDelta = calculateDelta(newTransaction);
+        applyDelta(newAccount, newDelta);
     }
 
     public AccountResponse getAccountById(UUID accountId, Auth auth) {
@@ -209,8 +175,7 @@ public class AccountService {
     }
 
     private User validateUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 
     public Account validateAccount(UUID accountId, Auth auth, int status) {

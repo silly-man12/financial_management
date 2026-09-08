@@ -83,10 +83,19 @@ public class UserService {
         return jwtTokenUtil.generateToken(auth);
     }
 
+    public User getAuthenticatedUser(Auth auth) {
+        if (auth == null || auth.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa xác thực");
+        }
+        User user = userRepository.findById(auth.getUUID())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
+        validateUser(user);
+        return user;
+    }
+
     public UserResponse getCurrentUser(Auth auth) {
-        return userRepository.findById(auth.getUUID())
-                .map(userMapper::toResponse)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        User user = getAuthenticatedUser(auth);
+        return userMapper.toResponse(user);
     }
 
     public UserResponse updateProfile(Auth auth, ChangeNameRequest request) {

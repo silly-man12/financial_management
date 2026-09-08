@@ -20,7 +20,7 @@ import com.example.financial_management.repository.DebtPaymentRepository;
 import com.example.financial_management.repository.DebtRepository;
 import com.example.financial_management.repository.SavingGoalContributionRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
+import com.example.financial_management.util.DateTimeUtils;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +42,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -54,7 +55,7 @@ import java.util.UUID;
 public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final AccountService accountService;
     private final DebtPaymentRepository debtPaymentRepository;
     private final DebtRepository debtRepository;
@@ -102,39 +103,23 @@ public class TransactionService {
                 .findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
                 .map(this::toEnrichedResponse);
 
-        return new PageResponse<>(
-                pageResult.getContent(),
-                pageResult.getNumber() + 1,
-                pageResult.getSize(),
-                pageResult.getTotalElements(),
-                pageResult.getTotalPages());
+        return PageResponse.of(pageResult);
     }
 
     public List<TransactionResponse> getByCategoryAndMonth(int category, String monthYear, Auth auth) {
         User user = getUser(auth);
+        YearMonth ym = DateTimeUtils.parseYearMonth(monthYear);
 
-        String[] parts = monthYear.split("/");
-        if (parts.length != 2) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid monthYear format. Expected format: MM/yyyy");
-        }
-
-        try {
-            int month = Integer.parseInt(parts[0]);
-            int year = Integer.parseInt(parts[1]);
-
-            return transactionRepository
-                    .findAllByCategoryAndMonth(
-                            user.getId(),
-                            TransactionType.EXPENSE,
-                            category,
-                            month,
-                            year)
-                    .stream()
-                    .map(this::toEnrichedResponse)
-                    .toList();
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Month and Year must be numbers");
-        }
+        return transactionRepository
+                .findAllByCategoryAndMonth(
+                        user.getId(),
+                        TransactionType.EXPENSE,
+                        category,
+                        ym.getMonthValue(),
+                        ym.getYear())
+                .stream()
+                .map(this::toEnrichedResponse)
+                .toList();
     }
 
     public TransactionResponse getById(UUID id, Auth auth) {
@@ -163,12 +148,7 @@ public class TransactionService {
                 .findByAccountIdAndUserId(account.getId(), user.getId(), pageable)
                 .map(this::toEnrichedResponse);
 
-        return new PageResponse<>(
-                pageResult.getContent(),
-                pageResult.getNumber() + 1,
-                pageResult.getSize(),
-                pageResult.getTotalElements(),
-                pageResult.getTotalPages());
+        return PageResponse.of(pageResult);
     }
 
     public List<TransactionResponse> getRecentTransactionsByAccount(UUID accountId, Auth auth) {
@@ -457,17 +437,31 @@ public class TransactionService {
                         filter),
                 pageable);
 
-        return new PageResponse<>(
-                result.getContent().stream().map(this::toEnrichedResponse).toList(),
-                result.getNumber() + 1,
-                result.getSize(),
-                result.getTotalElements(),
-                result.getTotalPages());
+        return PageResponse.of(result, this::toEnrichedResponse);
+    }
+
+    @Transactional
+    public Transaction recordSystemTransaction(
+            UUID userId,
+            UUID accountId,
+            BigDecimal amount,
+            int type,
+            int currency,
+            int category,
+            String description) {
+        Transaction tx = new Transaction();
+        tx.setUserId(userId);
+        tx.setAccountId(accountId);
+        tx.setAmount(amount);
+        tx.setType(type);
+        tx.setCurrency(currency);
+        tx.setCategory(category);
+        tx.setDescription(description);
+        return transactionRepository.save(tx);
     }
 
     private User getUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 
     private void validateCurrency(int currency, Account account) {

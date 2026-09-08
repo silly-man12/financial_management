@@ -1,6 +1,5 @@
 package com.example.financial_management.services;
 
-import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -9,25 +8,18 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
 import com.example.financial_management.model.report.response.CategoryDistribution;
-import com.itextpdf.text.*;
-import com.itextpdf.text.pdf.*;
+import com.example.financial_management.util.DateTimeUtils;
 
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.financial_management.constant.Category;
-import com.example.financial_management.constant.Status;
 import com.example.financial_management.constant.TransactionType;
 import com.example.financial_management.entity.Account;
 import com.example.financial_management.entity.Transaction;
@@ -63,7 +55,6 @@ import com.example.financial_management.model.report.response.SummaryReportRespo
 import com.example.financial_management.model.transaction.TransactionResponse;
 import com.example.financial_management.repository.AccountRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,9 +66,9 @@ public class ReportService {
         private final AccountRepository accountRepository;
         private final TransactionRepository transactionRepository;
         private final TransactionMapper transactionMapper;
-        private final UserRepository userRepository;
+        private final UserService userService;
         private final CurrencyExchangeService currencyExchangeService;
-        private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0");
+        private final PdfReportService pdfReportService;
 
         private TransactionResponse toEnrichedTransaction(Transaction transaction) {
                 TransactionResponse response = transactionMapper.toResponse(transaction);
@@ -90,7 +81,7 @@ public class ReportService {
         }
 
         public List<TransactionResponse> getSummaryByDataRange(Auth auth, String from, String to) {
-                LocalDateTime[] dateRange = resolveDateRange(null, from, to);
+                LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(null, from, to);
                 LocalDateTime startDate = dateRange[0];
                 LocalDateTime endDate = dateRange[1];
 
@@ -143,7 +134,7 @@ public class ReportService {
 
                 validateAccountAccess(auth, request.getAccountId());
 
-                YearMonth month = parseMonth(request.getMonth());
+                YearMonth month = DateTimeUtils.parseYearMonth(request.getMonth());
                 String monthFormatted = month.format(DateTimeFormatter.ofPattern("MM-yyyy"));
                 LocalDateTime start = month.atDay(1).atStartOfDay();
                 LocalDateTime end = month.atEndOfMonth().atTime(LocalTime.MAX);
@@ -281,7 +272,7 @@ public class ReportService {
                 User user = getUser(auth);
                 validateAccountAccess(auth, request.getAccountId());
 
-                YearMonth thisMonth = parseMonth(request.getMonth());
+                YearMonth thisMonth = DateTimeUtils.parseYearMonth(request.getMonth());
                 String monthFormatted = thisMonth.format(DateTimeFormatter.ofPattern("MM-yyyy"));
                 YearMonth lastMonth = thisMonth.minusMonths(1);
 
@@ -335,14 +326,13 @@ public class ReportService {
         }
 
         public ResponseEntity<byte[]> exportMonthlyReportByMonthPDF(ReportRequest request, Auth auth) {
-                byte[] pdf = buildMonthlyReportByMonthPDF(request, auth);
-                String safeMonth = request.getMonth() != null ? request.getMonth().trim().replace("/", "-").replace("\\", "-") : "month";
-                return buildPdfResponse(pdf, "report-" + safeMonth + ".pdf");
+                DailyReportResponse data = getDailyReport(request, auth);
+                return pdfReportService.exportMonthlyReportByMonthPDF(request.getMonth(), data);
         }
 
         public ResponseEntity<byte[]> exportMonthlyReportByYearPDF(MonthlyReportRequest request, Auth auth) {
-                byte[] pdf = buildMonthlyReportByYearPDF(request, auth);
-                return buildPdfResponse(pdf, "report-" + request.getYear() + ".pdf");
+                MonthlyReportResponse data = getMonthlyReport(request, auth);
+                return pdfReportService.exportMonthlyReportByYearPDF(request.getYear(), data);
         }
 
         public AccountSummary getReportByAccount(UUID accountId, Auth auth) {
@@ -423,166 +413,6 @@ public class ReportService {
                 return summary;
         }
 
-        private BaseFont getUnicodeBaseFont() {
-                try {
-                        return BaseFont.createFont("C:/Windows/Fonts/arial.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-                } catch (Exception e) {
-                        try {
-                                return BaseFont.createFont("C:/Windows/Fonts/times.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-                        } catch (Exception ex) {
-                                try {
-                                        return BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-                                } catch (Exception ex2) {
-                                        throw new RuntimeException("Error initializing PDF font", ex2);
-                                }
-                        }
-                }
-        }
-
-        // --- Private helper để tạo file PDF ---
-        private byte[] buildMonthlyReportByMonthPDF(ReportRequest request, Auth auth) {
-                DailyReportResponse data = getDailyReport(request, auth);
-                BaseFont baseFont = getUnicodeBaseFont();
-                Font titleFont = new Font(baseFont, 16, Font.BOLD);
-                Font contentFont = new Font(baseFont, 10, Font.NORMAL);
-                Font summaryFont = new Font(baseFont, 12, Font.BOLD);
-                Font headerFont = new Font(baseFont, 11, Font.BOLD);
-
-                try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                        Document doc = new Document(PageSize.A4);
-                        PdfWriter.getInstance(doc, out);
-                        doc.open();
-
-                        // --- Tiêu đề ---
-                        Paragraph title = new Paragraph("Báo cáo tháng - " + request.getMonth(), titleFont);
-                        title.setAlignment(Element.ALIGN_CENTER);
-                        doc.add(title);
-                        doc.add(Chunk.NEWLINE);
-
-                        // --- Bảng dữ liệu ---
-                        PdfPTable table = new PdfPTable(3);
-                        table.setWidthPercentage(100);
-                        addTableHeader(table, new String[] { "Ngày", "Thu nhập", "Chi tiêu" }, headerFont);
-
-                        for (DailyReportResponseItem item : data.getItems()) {
-                                table.addCell(new Phrase(item.getDate().toString(), contentFont));
-                                table.addCell(new Phrase(formatMoney(item.getIncome()), contentFont));
-                                table.addCell(new Phrase(formatMoney(item.getExpense()), contentFont));
-                        }
-
-                        doc.add(table);
-                        doc.add(Chunk.NEWLINE);
-
-                        // --- Tổng kết ---
-                        Paragraph summaryTitle = new Paragraph("Tổng kết", summaryFont);
-                        summaryTitle.setAlignment(Element.ALIGN_LEFT);
-                        doc.add(summaryTitle);
-                        doc.add(Chunk.NEWLINE);
-
-                        PdfPTable summaryTable = new PdfPTable(2);
-                        summaryTable.setWidthPercentage(60);
-                        summaryTable.setHorizontalAlignment(Element.ALIGN_LEFT);
-                        summaryTable.setWidths(new float[] { 3, 2 });
-
-                        addSummaryRow(summaryTable, "Tổng thu nhập:", formatMoney(data.getTotalIncome()), contentFont);
-                        addSummaryRow(summaryTable, "Tổng chi tiêu:", formatMoney(data.getTotalExpense()), contentFont);
-                        addSummaryRow(summaryTable, "Số dư ròng (Net):", formatMoney(data.getNet()), summaryFont);
-
-                        doc.add(summaryTable);
-
-                        doc.close();
-                        return out.toByteArray();
-                } catch (Exception e) {
-                        throw new RuntimeException("Error generating monthly PDF", e);
-                }
-        }
-
-        private byte[] buildMonthlyReportByYearPDF(MonthlyReportRequest request, Auth auth) {
-                MonthlyReportResponse data = getMonthlyReport(request, auth);
-                BaseFont baseFont = getUnicodeBaseFont();
-                Font titleFont = new Font(baseFont, 16, Font.BOLD);
-                Font contentFont = new Font(baseFont, 10, Font.NORMAL);
-                Font summaryFont = new Font(baseFont, 12, Font.BOLD);
-                Font headerFont = new Font(baseFont, 11, Font.BOLD);
-
-                try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                        Document doc = new Document(PageSize.A4);
-                        PdfWriter.getInstance(doc, out);
-                        doc.open();
-
-                        Paragraph title = new Paragraph("Báo cáo năm - " + request.getYear(), titleFont);
-                        title.setAlignment(Element.ALIGN_CENTER);
-                        doc.add(title);
-                        doc.add(Chunk.NEWLINE);
-
-                        PdfPTable table = new PdfPTable(4);
-                        table.setWidthPercentage(100);
-                        addTableHeader(table, new String[] { "Tháng", "Thu nhập", "Chi tiêu", "Net" }, headerFont);
-
-                        // Biến cộng dồn
-                        BigDecimal totalIncome = BigDecimal.ZERO;
-                        BigDecimal totalExpense = BigDecimal.ZERO;
-                        BigDecimal totalNet = BigDecimal.ZERO;
-
-                        for (MonthlyReportResponseItem item : data.getItems()) {
-                                table.addCell(new Phrase(String.valueOf(item.getMonth()), contentFont));
-                                table.addCell(new Phrase(formatMoney(item.getIncome()), contentFont));
-                                table.addCell(new Phrase(formatMoney(item.getExpense()), contentFont));
-                                table.addCell(new Phrase(formatMoney(item.getNet()), contentFont));
-
-                                totalIncome = totalIncome.add(item.getIncome());
-                                totalExpense = totalExpense.add(item.getExpense());
-                                totalNet = totalNet.add(item.getNet());
-                        }
-
-                        // Thêm dòng tổng cuối bảng
-                        PdfPCell totalCell = new PdfPCell(new Phrase("TỔNG CỘNG", summaryFont));
-                        totalCell.setColspan(1);
-                        totalCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                        table.addCell(totalCell);
-                        table.addCell(new Phrase(formatMoney(totalIncome), summaryFont));
-                        table.addCell(new Phrase(formatMoney(totalExpense), summaryFont));
-                        table.addCell(new Phrase(formatMoney(totalNet), summaryFont));
-
-                        doc.add(table);
-                        doc.close();
-                        return out.toByteArray();
-
-                } catch (Exception e) {
-                        throw new RuntimeException("Error generating yearly PDF", e);
-                }
-        }
-
-        // Helper method: thêm dòng tổng kết
-        private void addSummaryRow(PdfPTable table, String label, String value, Font font) {
-                PdfPCell labelCell = new PdfPCell(new Phrase(label, font));
-                labelCell.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                labelCell.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(labelCell);
-
-                PdfPCell valueCell = new PdfPCell(new Phrase(value, font));
-                valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                table.addCell(valueCell);
-        }
-
-        private void addTableHeader(PdfPTable table, String[] headers, Font font) {
-                for (String header : headers) {
-                        PdfPCell cell = new PdfPCell(new Phrase(header, font));
-                        cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                        table.addCell(cell);
-                }
-        }
-
-        // --- Build ResponseEntity ---
-        private ResponseEntity<byte[]> buildPdfResponse(byte[] pdf, String filename) {
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_PDF);
-                headers.setContentDisposition(
-                                ContentDisposition.attachment().filename(filename).build());
-                return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
-        }
-
         private Double calcPercentChange(BigDecimal current, BigDecimal previous) {
                 if (previous.compareTo(BigDecimal.ZERO) == 0) {
                         return null; // hoặc 100% nếu bạn muốn coi là tăng toàn bộ
@@ -594,8 +424,7 @@ public class ReportService {
         }
 
         private User getUser(Auth auth) {
-                return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                return userService.getAuthenticatedUser(auth);
         }
 
         private void validateAccountAccess(Auth auth, UUID accountId) {
@@ -611,87 +440,10 @@ public class ReportService {
                 }
         }
 
-        private YearMonth parseMonth(String monthStr) {
-                if (monthStr == null || monthStr.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tham số month không được để trống");
-                }
-                String cleanStr = monthStr.trim().replaceAll("^[\"']+|[\"']+$", "");
-
-                // Nếu là ISO datetime (ví dụ: 2026-09-07T16:26:09 hoặc có khoảng trắng giờ)
-                if (cleanStr.contains("T")) {
-                        cleanStr = cleanStr.substring(0, cleanStr.indexOf("T")).trim();
-                } else if (cleanStr.contains(" ")) {
-                        cleanStr = cleanStr.substring(0, cleanStr.indexOf(" ")).trim();
-                }
-
-                // Tự động thay thế placeholder yyyy hoặc MM nếu người dùng copy nguyên mẫu hướng dẫn
-                if (cleanStr.toLowerCase().contains("yyyy")) {
-                        cleanStr = cleanStr.replaceAll("(?i)yyyy", String.valueOf(LocalDate.now().getYear()));
-                }
-                if (cleanStr.toLowerCase().contains("mm")) {
-                        cleanStr = cleanStr.replaceAll("(?i)mm", String.format("%02d", LocalDate.now().getMonthValue()));
-                }
-
-                // 1. Thử parse trực tiếp theo YearMonth
-                String[] ymPatterns = {
-                                "MM-yyyy", "M-yyyy",
-                                "yyyy-MM", "yyyy-M",
-                                "MM/yyyy", "M/yyyy",
-                                "yyyy/MM", "yyyy/M",
-                                "MM.yyyy", "M.yyyy",
-                                "yyyy.MM", "yyyy.M",
-                                "yyyyMM"
-                };
-                for (String pattern : ymPatterns) {
-                        try {
-                                return YearMonth.parse(cleanStr, DateTimeFormatter.ofPattern(pattern));
-                        } catch (DateTimeParseException ignored) {
-                        }
-                }
-
-                // 2. Thử parse nếu client truyền cả ngày (LocalDate) ví dụ: 2026-09-07, 07/09/2026, 07-09-2026
-                String[] datePatterns = {
-                                "yyyy-MM-dd", "yyyy-M-d",
-                                "dd/MM/yyyy", "d/M/yyyy",
-                                "dd-MM-yyyy", "d-M-yyyy",
-                                "yyyy/MM/dd", "yyyy/M/d",
-                                "yyyyMMdd", "yyMMdd"
-                };
-                for (String pattern : datePatterns) {
-                        try {
-                                LocalDate d = LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern(pattern));
-                                return YearMonth.from(d);
-                        } catch (DateTimeParseException ignored) {
-                        }
-                }
-
-                // 3. Nếu là chuỗi số nguyên: ví dụ chỉ gửi tháng "9" hoặc "09"
-                if (cleanStr.matches("^\\d{1,2}$")) {
-                        int m = Integer.parseInt(cleanStr);
-                        if (m >= 1 && m <= 12) {
-                                return YearMonth.of(LocalDate.now().getYear(), m);
-                        }
-                }
-
-                // 4. Nếu gửi năm 4 chữ số: ví dụ "2026"
-                if (cleanStr.matches("^\\d{4}$")) {
-                        int y = Integer.parseInt(cleanStr);
-                        return YearMonth.of(y, LocalDate.now().getMonthValue());
-                }
-
-                log.warn("Invalid month input received: '{}'", monthStr);
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                String.format("Giá trị tháng '%s' không hợp lệ. Vui lòng gửi định dạng MM-yyyy (ví dụ: '09-2026'), yyyy-MM ('2026-09'), hoặc MM/yyyy ('09/2026')", monthStr));
-        }
-
-        private String formatMoney(BigDecimal amount) {
-                return MONEY_FORMAT.format(amount);
-        }
-
         public AnalyticsReportResponse getAnalyticsReport(Auth auth, String period, String startDateStr,
                         String endDateStr) {
                 User user = getUser(auth);
-                LocalDateTime[] dateRange = resolveDateRange(period, startDateStr, endDateStr);
+                LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(period, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
@@ -743,8 +495,10 @@ public class ReportService {
                 BigDecimal prevExpense = BigDecimal.ZERO;
                 if (prevTotals != null && !prevTotals.isEmpty() && prevTotals.get(0) != null) {
                         Object[] pRow = prevTotals.get(0);
-                        if (pRow[0] != null) prevIncome = (BigDecimal) pRow[0];
-                        if (pRow[1] != null) prevExpense = (BigDecimal) pRow[1];
+                        if (pRow[0] != null)
+                                prevIncome = (BigDecimal) pRow[0];
+                        if (pRow[1] != null)
+                                prevExpense = (BigDecimal) pRow[1];
                 }
 
                 Double incomeGrowthRate = calcPercentChange(totalIncome, prevIncome);
@@ -793,7 +547,7 @@ public class ReportService {
                 User user = getUser(auth);
                 int txType = (type != null) ? type : TransactionType.EXPENSE;
 
-                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(null, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
@@ -858,13 +612,14 @@ public class ReportService {
 
         public List<AccountFlowResponse> getAccountFlowReport(Auth auth, String startDateStr, String endDateStr) {
                 User user = getUser(auth);
-                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(null, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
                 List<Account> accounts = accountRepository.findAllByUserId(user.getId());
 
-                // 1. Tối ưu: Lấy dòng tiền vào/ra gom nhóm theo account_id trực tiếp từ SQL Server
+                // 1. Tối ưu: Lấy dòng tiền vào/ra gom nhóm theo account_id trực tiếp từ SQL
+                // Server
                 List<Object[]> flowRows = transactionRepository.sumFlowByAccount(
                                 user.getId(), startDateTime, endDateTime);
 
@@ -914,7 +669,7 @@ public class ReportService {
         public List<TopExpenseResponse> getTopExpensesReport(
                         Auth auth, String startDateStr, String endDateStr, Integer limit) {
                 User user = getUser(auth);
-                LocalDateTime[] dateRange = resolveDateRange(null, startDateStr, endDateStr);
+                LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(null, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];
                 LocalDateTime endDateTime = dateRange[1];
 
@@ -944,72 +699,6 @@ public class ReportService {
                                                 .createdAt(t.getCreatedAt())
                                                 .build())
                                 .toList();
-        }
-
-        private LocalDateTime[] resolveDateRange(String period, String startDateStr, String endDateStr) {
-                LocalDate start = parseFlexibleDate(startDateStr);
-                LocalDate end = parseFlexibleDate(endDateStr);
-
-                if (start != null && end != null) {
-                        if (start.isAfter(end)) {
-                                LocalDate temp = start;
-                                start = end;
-                                end = temp;
-                        }
-                } else if (start != null) {
-                        end = start.plusMonths(1).minusDays(1);
-                } else if (end != null) {
-                        start = end.withDayOfMonth(1);
-                } else {
-                        LocalDate now = LocalDate.now();
-                        if ("quarter".equalsIgnoreCase(period)) {
-                                int currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
-                                int startMonth = (currentQuarter - 1) * 3 + 1;
-                                start = LocalDate.of(now.getYear(), startMonth, 1);
-                                end = start.plusMonths(3).minusDays(1);
-                        } else if ("year".equalsIgnoreCase(period)) {
-                                start = LocalDate.of(now.getYear(), 1, 1);
-                                end = LocalDate.of(now.getYear(), 12, 31);
-                        } else {
-                                start = now.withDayOfMonth(1);
-                                end = now.withDayOfMonth(now.lengthOfMonth());
-                        }
-                }
-
-                LocalDateTime startDateTime = start.atStartOfDay();
-                LocalDateTime endDateTime = end.atTime(LocalTime.MAX);
-                return new LocalDateTime[] { startDateTime, endDateTime };
-        }
-
-        private LocalDate parseFlexibleDate(String dateString) {
-                if (dateString == null || dateString.isBlank()) {
-                        return null;
-                }
-                String cleanStr = dateString.trim();
-                if (cleanStr.contains("T")) {
-                        cleanStr = cleanStr.substring(0, cleanStr.indexOf("T"));
-                } else if (cleanStr.contains(" ")) {
-                        cleanStr = cleanStr.substring(0, cleanStr.indexOf(" "));
-                }
-
-                if (cleanStr.matches("\\d{6}")) {
-                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyMMdd"));
-                }
-                if (cleanStr.matches("\\d{8}")) {
-                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                }
-                if (cleanStr.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
-                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("yyyy-M-d"));
-                }
-                if (cleanStr.matches("\\d{1,2}/\\d{1,2}/\\d{4}")) {
-                        return LocalDate.parse(cleanStr, DateTimeFormatter.ofPattern("d/M/yyyy"));
-                }
-                try {
-                        return LocalDate.parse(cleanStr);
-                } catch (Exception e) {
-                        log.warn("Cannot parse date: {}", dateString);
-                        return null;
-                }
         }
 
 }

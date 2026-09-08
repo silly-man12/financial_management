@@ -33,7 +33,6 @@ import com.example.financial_management.model.saving_goal.SavingGoalWithdrawRequ
 import com.example.financial_management.repository.SavingGoalContributionRepository;
 import com.example.financial_management.repository.SavingGoalRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +46,8 @@ public class SavingGoalService {
     private final SavingGoalContributionRepository savingGoalContributionRepository;
     private final SavingGoalMapper savingGoalMapper;
     private final SavingGoalContributionMapper savingGoalContributionMapper;
-    private final UserRepository userRepository;
+    private final UserService userService;
+    private final TransactionService transactionService;
     private final AccountService accountService;
     private final TransactionRepository transactionRepository;
     private final CurrencyExchangeService currencyExchangeService;
@@ -441,25 +441,14 @@ public class SavingGoalService {
         return true;
     }
 
-    /**
-     * Helper lưu bản ghi Transaction chuyển tiền nội bộ phục vụ sao kê tài khoản
-     */
     private Transaction saveSavingTransaction(UUID userId, UUID accountId, BigDecimal amount, int type, int currency,
             String description) {
-        Transaction transaction = new Transaction();
-        transaction.setUserId(userId);
-        transaction.setAccountId(accountId);
-        transaction.setAmount(amount);
-        transaction.setType(type);
-        transaction.setCategory(Category.SAVINGS);
-        transaction.setCurrency(currency);
-        transaction.setDescription(description);
-        return transactionRepository.save(transaction);
+        return transactionService.recordSystemTransaction(userId, accountId, amount, type, currency, Category.SAVINGS,
+                description);
     }
 
     private User getUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 
 }

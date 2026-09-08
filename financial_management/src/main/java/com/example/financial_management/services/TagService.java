@@ -2,7 +2,6 @@ package com.example.financial_management.services;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,7 +26,6 @@ import com.example.financial_management.model.tag.TagResponse;
 import com.example.financial_management.model.tag.TagSummaryResponse;
 import com.example.financial_management.repository.TagRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,25 +37,17 @@ public class TagService {
 
     private final TagRepository tagRepository;
     private final TransactionRepository transactionRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final TagMapper tagMapper;
 
     private User validateUser(Auth auth) {
-        if (auth == null || auth.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập");
-        }
-        return userRepository.findById(UUID.fromString(auth.getId()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
+        return userService.getAuthenticatedUser(auth);
     }
 
-
     private String cleanTagName(String name) {
-        if (name == null) return "";
-        String trimmed = name.trim();
-        while (trimmed.startsWith("#")) {
-            trimmed = trimmed.substring(1).trim();
-        }
-        return trimmed;
+        if (name == null)
+            return "";
+        return name.trim().replaceFirst("^#+", "").trim();
     }
 
     public List<TagResponse> getAllTags(Auth auth) {
@@ -139,7 +129,8 @@ public class TagService {
             } else if (row[0] != null) {
                 try {
                     tagId = UUID.fromString(row[0].toString());
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             if (tagId != null) {
                 statsMap.put(tagId, row);
@@ -155,10 +146,12 @@ public class TagService {
 
             if (row != null) {
                 if (row[1] != null) {
-                    totalExpense = row[1] instanceof BigDecimal ? (BigDecimal) row[1] : new BigDecimal(row[1].toString());
+                    totalExpense = row[1] instanceof BigDecimal ? (BigDecimal) row[1]
+                            : new BigDecimal(row[1].toString());
                 }
                 if (row[2] != null) {
-                    totalIncome = row[2] instanceof BigDecimal ? (BigDecimal) row[2] : new BigDecimal(row[2].toString());
+                    totalIncome = row[2] instanceof BigDecimal ? (BigDecimal) row[2]
+                            : new BigDecimal(row[2].toString());
                 }
                 if (row[3] != null) {
                     txCount = ((Number) row[3]).intValue();
@@ -229,9 +222,11 @@ public class TagService {
 
         Set<Tag> resolvedTags = new HashSet<>();
         for (String raw : rawTags) {
-            if (raw == null) continue;
+            if (raw == null)
+                continue;
             String clean = cleanTagName(raw);
-            if (clean.isBlank()) continue;
+            if (clean.isBlank())
+                continue;
 
             // Kiểm tra xem có phải UUID không
             try {
