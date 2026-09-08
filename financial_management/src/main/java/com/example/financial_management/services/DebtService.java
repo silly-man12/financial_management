@@ -31,7 +31,6 @@ import com.example.financial_management.model.debt.DebtUpdateRequest;
 import com.example.financial_management.repository.DebtPaymentRepository;
 import com.example.financial_management.repository.DebtRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +44,8 @@ public class DebtService {
     private final DebtPaymentRepository debtPaymentRepository;
     private final DebtMapper debtMapper;
     private final DebtPaymentMapper debtPaymentMapper;
-    private final UserRepository userRepository;
+    private final UserService userService;
+    private final TransactionService transactionService;
     private final AccountService accountService;
     private final TransactionRepository transactionRepository;
     private final CurrencyExchangeService currencyExchangeService;
@@ -432,19 +432,11 @@ public class DebtService {
 
     private Transaction recordDebtTransaction(UUID userId, UUID accountId, BigDecimal amount, int type, int currency,
             String description) {
-        Transaction transaction = new Transaction();
-        transaction.setUserId(userId);
-        transaction.setAccountId(accountId);
-        transaction.setAmount(amount);
-        transaction.setType(type);
-        transaction.setCategory(Category.DEBT);
-        transaction.setCurrency(currency);
-        transaction.setDescription(description);
-        return transactionRepository.save(transaction);
+        return transactionService.recordSystemTransaction(userId, accountId, amount, type, currency, Category.DEBT,
+                description);
     }
 
     private User getUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 }

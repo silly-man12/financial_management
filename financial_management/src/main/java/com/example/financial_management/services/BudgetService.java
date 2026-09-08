@@ -13,7 +13,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.financial_management.constant.Status;
 import com.example.financial_management.entity.Budget;
 import com.example.financial_management.entity.Tag;
 import com.example.financial_management.entity.User;
@@ -25,7 +24,6 @@ import com.example.financial_management.model.budget.BudgetRequest;
 import com.example.financial_management.model.budget.BudgetResponse;
 import com.example.financial_management.repository.BudgetRepository;
 import com.example.financial_management.repository.TransactionRepository;
-import com.example.financial_management.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 public class BudgetService {
     private final BudgetRepository budgetRepository;
     private final TransactionRepository transactionRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final BudgetMapper budgetMapper;
     private final TagMapper tagMapper;
     private final TagService tagService;
@@ -124,7 +122,8 @@ public class BudgetService {
                 if (budget.getCategory() >= 0) {
                     Set<UUID> excludedTagIds = new HashSet<>();
                     for (Budget otherBudget : budgets) {
-                        if (otherBudget.getCategory() == budget.getCategory() && !otherBudget.getId().equals(budget.getId())) {
+                        if (otherBudget.getCategory() == budget.getCategory()
+                                && !otherBudget.getId().equals(budget.getId())) {
                             if (otherBudget.getTags() != null && !otherBudget.getTags().isEmpty()) {
                                 for (Tag t : otherBudget.getTags()) {
                                     excludedTagIds.add(t.getId());
@@ -137,7 +136,8 @@ public class BudgetService {
 
                     if (!excludedTagIds.isEmpty()) {
                         spending = transactionRepository.sumSpendingByCategoryAndMonthExcludingTags(
-                                user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear(), excludedTagIds);
+                                user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear(),
+                                excludedTagIds);
                     } else {
                         // Tra cứu nhanh từ Map đã tổng hợp từ trước (O(1), không query DB)
                         spending = categorySpendingMap.getOrDefault(budget.getCategory(), BigDecimal.ZERO);
@@ -186,7 +186,9 @@ public class BudgetService {
         Budget budget = new Budget();
         budget.setUserId(user.getId());
         budget.setCategory(request.getCategory());
-        budget.setDescription(request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription() : "");
+        budget.setDescription(
+                request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription()
+                        : "");
         budget.setAmount(request.getAmount());
         budget.setMonth(request.getMonth());
         budget.setYear(request.getYear());
@@ -219,7 +221,9 @@ public class BudgetService {
         }
 
         budget.setCategory(request.getCategory());
-        budget.setDescription(request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription() : "");
+        budget.setDescription(
+                request.getDescription() != null && !request.getDescription().isBlank() ? request.getDescription()
+                        : "");
         budget.setAmount(request.getAmount());
         budget.setMonth(request.getMonth());
         budget.setYear(request.getYear());
@@ -263,8 +267,6 @@ public class BudgetService {
     }
 
     private User validateUser(Auth auth) {
-        return userRepository.findByIdAndStatus(UUID.fromString(auth.getId()), Status.ACTIVE)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return userService.getAuthenticatedUser(auth);
     }
 }
-
