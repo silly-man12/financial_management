@@ -9,6 +9,7 @@ import com.example.financial_management.entity.base.EntityBase;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -16,10 +17,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
-@Getter 
+@Getter
 @Setter
 @Accessors(chain = true)
-@Table(name = "accounts")
+@Table(name = "accounts", indexes = {
+        @Index(name = "idx_acc_user_status", columnList = "user_id, status"),
+        @Index(name = "idx_acc_user", columnList = "user_id")
+})
 @Entity
 public class Account extends EntityBase {
 

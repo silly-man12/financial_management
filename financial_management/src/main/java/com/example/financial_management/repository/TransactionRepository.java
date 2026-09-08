@@ -10,6 +10,8 @@ import java.util.UUID;
 import com.example.financial_management.model.report.response.CategoryDistribution;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -20,9 +22,15 @@ import com.example.financial_management.model.report.response.CategoryReportItem
 import com.example.financial_management.model.report.response.MonthlyReportResponseItem;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID>, JpaSpecificationExecutor<Transaction> {
+    @EntityGraph(attributePaths = {"tags"})
     Page<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"tags"})
     List<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    @Override
+    @EntityGraph(attributePaths = {"tags"})
+    Page<Transaction> findAll(Specification<Transaction> spec, Pageable pageable);
 
     Optional<Transaction> findByIdAndUserId(UUID id, UUID userId);
 
@@ -43,8 +51,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     boolean existsByAccountId(UUID accountId);
 
+    @EntityGraph(attributePaths = {"tags"})
     Page<Transaction> findByAccountIdAndUserId(UUID accountId, UUID userId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"tags"})
     List<Transaction> findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(UUID accountId, UUID userId);
 
     List<Transaction> findAllByAccountIdAndUserId(UUID accountId, UUID userId);
@@ -271,6 +281,110 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             @Param("year") int year);
 
     List<Transaction> findAllByTransferId(UUID transferId);
+
+    @Query("""
+            SELECT t.category, COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
+            GROUP BY t.category
+            """)
+    List<Object[]> sumSpendingGroupedByCategory(
+            @Param("userId") UUID userId,
+            @Param("month") int month,
+            @Param("year") int year);
+
+    @Query("""
+            SELECT tag.id, COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.tags tag
+            WHERE t.userId = :userId
+              AND t.type = 0
+              AND t.category != 16
+              AND MONTH(t.createdAt) = :month
+              AND YEAR(t.createdAt) = :year
+            GROUP BY tag.id
+            """)
+    List<Object[]> sumSpendingGroupedByTag(
+            @Param("userId") UUID userId,
+            @Param("month") int month,
+            @Param("year") int year);
+
+    @Query(value = """
+            SELECT
+                tt.tag_id,
+                COALESCE(SUM(CASE WHEN t.type = 0 AND t.category != 16 THEN t.amount ELSE 0 END), 0) AS total_expense,
+                COALESCE(SUM(CASE WHEN t.type = 1 AND t.category != 16 THEN t.amount ELSE 0 END), 0) AS total_income,
+                COUNT(t.id) AS tx_count
+            FROM transaction_tags tt
+            JOIN transactions t ON tt.transaction_id = t.id
+            WHERE t.user_id = :userId
+            GROUP BY tt.tag_id
+            """, nativeQuery = true)
+    List<Object[]> sumTagStatsByUserId(@Param("userId") UUID userId);
+
+    @Query("""
+            SELECT t.category, SUM(t.amount), COUNT(t.id)
+            FROM Transaction t
+            WHERE t.userId = :userId
+              AND t.type = :type
+              AND t.category != 16
+              AND t.createdAt BETWEEN :start AND :end
+            GROUP BY t.category
+            """)
+    List<Object[]> sumGroupedByCategoryAndType(
+            @Param("userId") UUID userId,
+            @Param("type") int type,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query(value = """
+            SELECT
+                CAST(created_at AS date) AS tx_date,
+                COALESCE(SUM(CASE WHEN type = 1 AND category != 16 THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN type = 0 AND category != 16 THEN amount ELSE 0 END), 0) AS expense
+            FROM transactions
+            WHERE user_id = :userId
+              AND created_at BETWEEN :start AND :end
+            GROUP BY CAST(created_at AS date)
+            ORDER BY tx_date ASC
+            """, nativeQuery = true)
+    List<Object[]> sumDailyAggregatedByUser(
+            @Param("userId") UUID userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query(value = """
+            SELECT
+                account_id,
+                COALESCE(SUM(CASE WHEN type = 1 THEN amount ELSE 0 END), 0) AS inflow,
+                COALESCE(SUM(CASE WHEN type = 0 THEN amount ELSE 0 END), 0) AS outflow
+            FROM transactions
+            WHERE user_id = :userId
+              AND account_id IS NOT NULL
+              AND created_at BETWEEN :start AND :end
+            GROUP BY account_id
+            """, nativeQuery = true)
+    List<Object[]> sumFlowByAccount(
+            @Param("userId") UUID userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query(value = """
+            SELECT
+                COALESCE(SUM(CASE WHEN type = 1 AND category != 16 THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN type = 0 AND category != 16 THEN amount ELSE 0 END), 0) AS expense
+            FROM transactions
+            WHERE user_id = :userId
+              AND created_at BETWEEN :start AND :end
+            """, nativeQuery = true)
+    List<Object[]> sumTotalIncomeAndExpense(
+            @Param("userId") UUID userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }
 
 

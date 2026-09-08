@@ -3,8 +3,10 @@ package com.example.financial_management.services;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -119,12 +121,7 @@ public class TagService {
         Tag tag = tagRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tag"));
 
-        List<Transaction> transactionsWithTag = transactionRepository.findAllByUserIdAndTagId(user.getId(), id);
-        for (Transaction t : transactionsWithTag) {
-            t.getTags().remove(tag);
-            transactionRepository.save(t);
-        }
-
+        tagRepository.unlinkTagFromAllTransactions(id);
         tagRepository.delete(tag);
         return true;
     }
@@ -132,10 +129,54 @@ public class TagService {
     public List<TagSummaryResponse> getTagsSummary(Auth auth) {
         User user = validateUser(auth);
         List<Tag> tags = tagRepository.findAllByUserIdOrderByNameAsc(user.getId());
-        List<TagSummaryResponse> summaries = new ArrayList<>();
+        List<Object[]> stats = transactionRepository.sumTagStatsByUserId(user.getId());
 
+        Map<UUID, Object[]> statsMap = new HashMap<>();
+        for (Object[] row : stats) {
+            UUID tagId = null;
+            if (row[0] instanceof UUID) {
+                tagId = (UUID) row[0];
+            } else if (row[0] != null) {
+                try {
+                    tagId = UUID.fromString(row[0].toString());
+                } catch (Exception ignored) {}
+            }
+            if (tagId != null) {
+                statsMap.put(tagId, row);
+            }
+        }
+
+        List<TagSummaryResponse> summaries = new ArrayList<>();
         for (Tag tag : tags) {
-            summaries.add(calculateSummaryForTag(tag, user.getId()));
+            Object[] row = statsMap.get(tag.getId());
+            BigDecimal totalExpense = BigDecimal.ZERO;
+            BigDecimal totalIncome = BigDecimal.ZERO;
+            int txCount = 0;
+
+            if (row != null) {
+                if (row[1] != null) {
+                    totalExpense = row[1] instanceof BigDecimal ? (BigDecimal) row[1] : new BigDecimal(row[1].toString());
+                }
+                if (row[2] != null) {
+                    totalIncome = row[2] instanceof BigDecimal ? (BigDecimal) row[2] : new BigDecimal(row[2].toString());
+                }
+                if (row[3] != null) {
+                    txCount = ((Number) row[3]).intValue();
+                }
+            }
+
+            BigDecimal balance = totalIncome.subtract(totalExpense);
+
+            summaries.add(TagSummaryResponse.builder()
+                    .id(tag.getId())
+                    .name(tag.getName())
+                    .color(tag.getColor())
+                    .totalExpense(totalExpense)
+                    .totalIncome(totalIncome)
+                    .balance(balance)
+                    .transactionCount(txCount)
+                    .createdAt(tag.getCreatedAt())
+                    .build());
         }
 
         return summaries;
