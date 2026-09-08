@@ -6,10 +6,13 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import java.time.Duration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -31,14 +34,10 @@ public class CurrencyExchangeService {
 
     private final CurrencyExchangeRepository currencyExchangeRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
-
-    private static RestTemplate createRestTemplateWithTimeouts() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000); // 3s
-        factory.setReadTimeout(5000);    // 5s
-        return new RestTemplate(factory);
-    }
+    private final RestTemplate restTemplate = new RestTemplateBuilder()
+            .connectTimeout(Duration.ofSeconds(3))
+            .readTimeout(Duration.ofSeconds(5))
+            .build();
 
     private static final BigDecimal DEFAULT_USD_VND_RATE = BigDecimal.valueOf(25450.00);
     private static final String API_URL = "https://open.er-api.com/v6/latest/USD";
@@ -67,6 +66,7 @@ public class CurrencyExchangeService {
     /**
      * Đồng bộ tỷ giá ngoại tệ USD/VND trực tuyến từ API
      */
+    @CacheEvict(value = "exchangeRate", allEntries = true)
     public CurrencyExchangeResponse syncDailyRate() {
         LocalDate today = LocalDate.now();
         BigDecimal fetchedRate = null;
@@ -124,6 +124,7 @@ public class CurrencyExchangeService {
     /**
      * Lấy tỷ giá USD -> VND hiện tại
      */
+    @Cacheable("exchangeRate")
     public BigDecimal getCurrentRate() {
         if (cachedUsdToVndRate == null || cachedUsdToVndRate.compareTo(BigDecimal.ZERO) <= 0) {
             cachedUsdToVndRate = loadLatestRateFromDb();
