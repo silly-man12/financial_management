@@ -2,8 +2,10 @@ package com.example.financial_management.services;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -67,6 +69,25 @@ public class BudgetService {
                 user.getId(),
                 month,
                 year);
+
+        // Gom trước tổng chi tiêu theo danh mục trong tháng (1 câu query duy nhất)
+        List<Object[]> categorySums = transactionRepository.sumSpendingGroupedByCategory(user.getId(), month, year);
+        Map<Integer, BigDecimal> categorySpendingMap = new HashMap<>();
+        for (Object[] row : categorySums) {
+            if (row[0] != null && row[1] != null) {
+                categorySpendingMap.put(((Number) row[0]).intValue(), (BigDecimal) row[1]);
+            }
+        }
+
+        // Gom trước tổng chi tiêu theo Tag trong tháng (1 câu query duy nhất)
+        List<Object[]> tagSums = transactionRepository.sumSpendingGroupedByTag(user.getId(), month, year);
+        Map<UUID, BigDecimal> tagSpendingMap = new HashMap<>();
+        for (Object[] row : tagSums) {
+            if (row[0] != null && row[1] != null) {
+                tagSpendingMap.put((UUID) row[0], (BigDecimal) row[1]);
+            }
+        }
+
         List<BudgetCheckingResponse> responses = new ArrayList<>();
         for (Budget budget : budgets) {
             BudgetCheckingResponse response = new BudgetCheckingResponse();
@@ -93,11 +114,13 @@ public class BudgetService {
             }
 
             if (!budgetTagIds.isEmpty()) {
-                // Tính tổng chi tiêu theo Tag trong tháng
-                spending = transactionRepository.sumSpendingByTagIdsAndMonth(
-                        user.getId(), budgetTagIds, budget.getMonth(), budget.getYear());
+                if (budgetTagIds.size() == 1) {
+                    spending = tagSpendingMap.getOrDefault(budgetTagIds.iterator().next(), BigDecimal.ZERO);
+                } else {
+                    spending = transactionRepository.sumSpendingByTagIdsAndMonth(
+                            user.getId(), budgetTagIds, budget.getMonth(), budget.getYear());
+                }
             } else {
-                // Ngân sách chưa có tag: tính tổng chi tiêu danh mục nhưng loại trừ các giao dịch có tag của các ngân sách có tag khác trong cùng danh mục và tháng
                 if (budget.getCategory() >= 0) {
                     Set<UUID> excludedTagIds = new HashSet<>();
                     for (Budget otherBudget : budgets) {
@@ -116,8 +139,8 @@ public class BudgetService {
                         spending = transactionRepository.sumSpendingByCategoryAndMonthExcludingTags(
                                 user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear(), excludedTagIds);
                     } else {
-                        spending = transactionRepository.sumSpendingByCategoryAndMonth(
-                                user.getId(), budget.getCategory(), budget.getMonth(), budget.getYear());
+                        // Tra cứu nhanh từ Map đã tổng hợp từ trước (O(1), không query DB)
+                        spending = categorySpendingMap.getOrDefault(budget.getCategory(), BigDecimal.ZERO);
                     }
                 }
             }

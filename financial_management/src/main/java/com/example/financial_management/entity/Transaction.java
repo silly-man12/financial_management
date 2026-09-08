@@ -11,6 +11,7 @@ import com.example.financial_management.entity.base.EntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -19,7 +20,12 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "transactions")
+@Table(name = "transactions", indexes = {
+    @Index(name = "idx_tx_user_created", columnList = "user_id, created_at DESC"),
+    @Index(name = "idx_tx_account_user", columnList = "account_id, user_id"),
+    @Index(name = "idx_tx_user_type_cat", columnList = "user_id, type, category"),
+    @Index(name = "idx_tx_transfer_id", columnList = "transfer_id")
+})
 @Getter
 @Setter
 public class Transaction extends EntityBase {

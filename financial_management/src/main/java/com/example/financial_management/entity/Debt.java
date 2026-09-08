@@ -10,12 +10,16 @@ import com.example.financial_management.entity.base.EntityBase;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "debts")
+@Table(name = "debts", indexes = {
+    @Index(name = "idx_debt_user_status", columnList = "user_id, status"),
+    @Index(name = "idx_debt_user_type", columnList = "user_id, type")
+})
 @Getter
 @Setter
 public class Debt extends EntityBase {

@@ -700,20 +700,29 @@ public class ReportService {
                 LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
                 LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
 
-                List<Transaction> currentTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+                // 1. Tối ưu: Lấy trực tiếp dữ liệu nhóm theo ngày từ SQL Server
+                List<Object[]> dailyRows = transactionRepository.sumDailyAggregatedByUser(
                                 user.getId(), startDateTime, endDateTime);
-                List<Transaction> prevTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
-                                user.getId(), prevStartDateTime, prevEndDateTime);
 
-                BigDecimal totalIncome = currentTransactions.stream()
-                                .filter(t -> t.getType() == TransactionType.INCOME)
-                                .map(Transaction::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                Map<LocalDate, BigDecimal[]> dailyAggMap = new java.util.HashMap<>();
+                BigDecimal totalIncome = BigDecimal.ZERO;
+                BigDecimal totalExpense = BigDecimal.ZERO;
 
-                BigDecimal totalExpense = currentTransactions.stream()
-                                .filter(t -> t.getType() == TransactionType.EXPENSE)
-                                .map(Transaction::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                for (Object[] row : dailyRows) {
+                        LocalDate date;
+                        if (row[0] instanceof java.sql.Date sqlDate) {
+                                date = sqlDate.toLocalDate();
+                        } else if (row[0] instanceof LocalDate localDate) {
+                                date = localDate;
+                        } else {
+                                date = LocalDate.parse(row[0].toString());
+                        }
+                        BigDecimal inc = row[1] != null ? (BigDecimal) row[1] : BigDecimal.ZERO;
+                        BigDecimal exp = row[2] != null ? (BigDecimal) row[2] : BigDecimal.ZERO;
+                        dailyAggMap.put(date, new BigDecimal[] { inc, exp });
+                        totalIncome = totalIncome.add(inc);
+                        totalExpense = totalExpense.add(exp);
+                }
 
                 BigDecimal netIncome = totalIncome.subtract(totalExpense);
 
@@ -727,15 +736,16 @@ public class ReportService {
                 BigDecimal dailyAverage = totalExpense.divide(BigDecimal.valueOf(days), 0, RoundingMode.HALF_UP);
                 BigDecimal forecastExpense = dailyAverage.multiply(BigDecimal.valueOf(days));
 
-                BigDecimal prevIncome = prevTransactions.stream()
-                                .filter(t -> t.getType() == TransactionType.INCOME)
-                                .map(Transaction::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                BigDecimal prevExpense = prevTransactions.stream()
-                                .filter(t -> t.getType() == TransactionType.EXPENSE)
-                                .map(Transaction::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                // 2. Tối ưu: Lấy tổng thu chi kỳ trước trực tiếp từ SQL Server
+                List<Object[]> prevTotals = transactionRepository.sumTotalIncomeAndExpense(
+                                user.getId(), prevStartDateTime, prevEndDateTime);
+                BigDecimal prevIncome = BigDecimal.ZERO;
+                BigDecimal prevExpense = BigDecimal.ZERO;
+                if (prevTotals != null && !prevTotals.isEmpty() && prevTotals.get(0) != null) {
+                        Object[] pRow = prevTotals.get(0);
+                        if (pRow[0] != null) prevIncome = (BigDecimal) pRow[0];
+                        if (pRow[1] != null) prevExpense = (BigDecimal) pRow[1];
+                }
 
                 Double incomeGrowthRate = calcPercentChange(totalIncome, prevIncome);
                 Double expenseGrowthRate = calcPercentChange(totalExpense, prevExpense);
@@ -751,25 +761,15 @@ public class ReportService {
                                 .expenseGrowthRate(expenseGrowthRate)
                                 .build();
 
-                Map<LocalDate, List<Transaction>> dailyMap = currentTransactions.stream()
-                                .collect(Collectors.groupingBy(t -> t.getCreatedAt().toLocalDate()));
-
                 List<AnalyticsChartPoint> chart = new java.util.ArrayList<>();
                 LocalDate cur = startDateTime.toLocalDate();
                 LocalDate end = endDateTime.toLocalDate();
                 DateTimeFormatter labelFormatter = DateTimeFormatter.ofPattern("dd/MM");
 
                 while (!cur.isAfter(end)) {
-                        List<Transaction> dayTx = dailyMap.getOrDefault(cur, List.of());
-                        BigDecimal dayIncome = dayTx.stream()
-                                        .filter(t -> t.getType() == TransactionType.INCOME)
-                                        .map(Transaction::getAmount)
-                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                        BigDecimal dayExpense = dayTx.stream()
-                                        .filter(t -> t.getType() == TransactionType.EXPENSE)
-                                        .map(Transaction::getAmount)
-                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        BigDecimal[] dayVals = dailyAggMap.get(cur);
+                        BigDecimal dayIncome = dayVals != null ? dayVals[0] : BigDecimal.ZERO;
+                        BigDecimal dayExpense = dayVals != null ? dayVals[1] : BigDecimal.ZERO;
 
                         chart.add(AnalyticsChartPoint.builder()
                                         .label(cur.format(labelFormatter))
@@ -802,38 +802,35 @@ public class ReportService {
                 LocalDateTime prevEndDateTime = startDateTime.minusSeconds(1);
                 LocalDateTime prevStartDateTime = startDateTime.minusDays(days);
 
-                List<Transaction> currentTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
-                                user.getId(), startDateTime, endDateTime).stream()
-                                .filter(t -> t.getType() == txType)
-                                .toList();
+                // 1. Tối ưu: Lấy phân bổ danh mục kỳ hiện tại trực tiếp từ SQL Server
+                List<Object[]> currentCatRows = transactionRepository.sumGroupedByCategoryAndType(
+                                user.getId(), txType, startDateTime, endDateTime);
 
-                List<Transaction> prevTransactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
-                                user.getId(), prevStartDateTime, prevEndDateTime).stream()
-                                .filter(t -> t.getType() == txType)
-                                .toList();
+                // 2. Tối ưu: Lấy phân bổ danh mục kỳ trước trực tiếp từ SQL Server
+                List<Object[]> prevCatRows = transactionRepository.sumGroupedByCategoryAndType(
+                                user.getId(), txType, prevStartDateTime, prevEndDateTime);
 
-                BigDecimal totalAmount = currentTransactions.stream()
-                                .map(Transaction::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal totalAmount = BigDecimal.ZERO;
+                for (Object[] row : currentCatRows) {
+                        if (row[1] != null) {
+                                totalAmount = totalAmount.add((BigDecimal) row[1]);
+                        }
+                }
 
-                Map<Integer, BigDecimal> prevCategorySumMap = prevTransactions.stream()
-                                .collect(Collectors.groupingBy(
-                                                Transaction::getCategory,
-                                                Collectors.reducing(BigDecimal.ZERO, Transaction::getAmount,
-                                                                BigDecimal::add)));
-
-                Map<Integer, List<Transaction>> categoryMap = currentTransactions.stream()
-                                .collect(Collectors.groupingBy(Transaction::getCategory));
+                Map<Integer, BigDecimal> prevCategorySumMap = new java.util.HashMap<>();
+                for (Object[] row : prevCatRows) {
+                        if (row[0] != null && row[1] != null) {
+                                int cat = ((Number) row[0]).intValue();
+                                prevCategorySumMap.put(cat, (BigDecimal) row[1]);
+                        }
+                }
 
                 List<CategoryDistributionResponse> result = new java.util.ArrayList<>();
 
-                for (Map.Entry<Integer, List<Transaction>> entry : categoryMap.entrySet()) {
-                        int categoryId = entry.getKey();
-                        List<Transaction> txList = entry.getValue();
-
-                        BigDecimal catTotal = txList.stream()
-                                        .map(Transaction::getAmount)
-                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                for (Object[] row : currentCatRows) {
+                        int categoryId = ((Number) row[0]).intValue();
+                        BigDecimal catTotal = row[1] != null ? (BigDecimal) row[1] : BigDecimal.ZERO;
+                        int txCount = row[2] != null ? ((Number) row[2]).intValue() : 0;
 
                         Double percentage = 0.0;
                         if (totalAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -850,7 +847,7 @@ public class ReportService {
                                         .categoryName(Category.getName(categoryId))
                                         .total(catTotal)
                                         .percentage(percentage)
-                                        .transactionCount(txList.size())
+                                        .transactionCount(txCount)
                                         .changeVsPreviousPeriod(change)
                                         .build());
                 }
@@ -866,27 +863,36 @@ public class ReportService {
                 LocalDateTime endDateTime = dateRange[1];
 
                 List<Account> accounts = accountRepository.findAllByUserId(user.getId());
-                List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
+
+                // 1. Tối ưu: Lấy dòng tiền vào/ra gom nhóm theo account_id trực tiếp từ SQL Server
+                List<Object[]> flowRows = transactionRepository.sumFlowByAccount(
                                 user.getId(), startDateTime, endDateTime);
 
-                Map<UUID, List<Transaction>> txByAccount = transactions.stream()
-                                .filter(t -> t.getAccountId() != null)
-                                .collect(Collectors.groupingBy(Transaction::getAccountId));
+                Map<UUID, Object[]> flowMap = new java.util.HashMap<>();
+                for (Object[] row : flowRows) {
+                        if (row[0] != null) {
+                                UUID accId;
+                                if (row[0] instanceof UUID u) {
+                                        accId = u;
+                                } else {
+                                        accId = UUID.fromString(row[0].toString());
+                                }
+                                flowMap.put(accId, row);
+                        }
+                }
 
                 List<AccountFlowResponse> result = new java.util.ArrayList<>();
 
                 for (Account account : accounts) {
-                        List<Transaction> accTx = txByAccount.getOrDefault(account.getId(), List.of());
+                        Object[] accFlow = flowMap.get(account.getId());
 
-                        BigDecimal inflow = accTx.stream()
-                                        .filter(t -> t.getType() == TransactionType.INCOME)
-                                        .map(Transaction::getAmount)
-                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        BigDecimal inflow = (accFlow != null && accFlow[1] != null)
+                                        ? (BigDecimal) accFlow[1]
+                                        : BigDecimal.ZERO;
 
-                        BigDecimal outflow = accTx.stream()
-                                        .filter(t -> t.getType() == TransactionType.EXPENSE)
-                                        .map(Transaction::getAmount)
-                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        BigDecimal outflow = (accFlow != null && accFlow[2] != null)
+                                        ? (BigDecimal) accFlow[2]
+                                        : BigDecimal.ZERO;
 
                         BigDecimal netFlow = inflow.subtract(outflow);
 

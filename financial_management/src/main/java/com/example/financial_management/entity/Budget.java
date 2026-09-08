@@ -10,6 +10,7 @@ import com.example.financial_management.entity.base.EntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -21,7 +22,9 @@ import lombok.experimental.Accessors;
 @Getter
 @Setter
 @Accessors(chain = true)
-@Table(name = "budgets")
+@Table(name = "budgets", indexes = {
+    @Index(name = "idx_budget_user_month_year", columnList = "user_id, month, year")
+})
 @Entity
 public class Budget extends EntityBase {
     @Column(name = "user_id", nullable = false, columnDefinition = "uniqueidentifier")
