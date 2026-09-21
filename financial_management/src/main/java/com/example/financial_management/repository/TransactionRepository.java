@@ -111,6 +111,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
                   AND t.createdAt BETWEEN :from AND :to
                   AND (:accountId IS NULL OR t.accountId = :accountId)
                   AND (:type IS NULL OR t.type = :type)
+                  AND t.category NOT IN (9, 16)
             """)
     Optional<BigDecimal> sumAmount(@Param("userId") UUID userId,
             @Param("from") LocalDateTime from,
@@ -122,8 +123,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
                   SELECT
                 CAST([created_at] AS date) AS date,
                 account_id,
-                COALESCE(SUM(CASE WHEN [type] = 1 THEN [amount] ELSE 0 END), 0) AS income,
-                COALESCE(SUM(CASE WHEN [type] = 0 THEN [amount] ELSE 0 END), 0) AS expense
+                COALESCE(SUM(CASE WHEN [type] = 1 AND [category] NOT IN (9, 16) THEN [amount] ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN [type] = 0 AND [category] NOT IN (9, 16) THEN [amount] ELSE 0 END), 0) AS expense
             FROM [transactions]
             WHERE [user_id] = :userId
               AND [created_at] BETWEEN :start AND :end
@@ -140,8 +141,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
     @Query("""
                 SELECT new com.example.financial_management.model.report.response.MonthlyReportResponseItem(
                     MONTH(t.createdAt),
-                    COALESCE(SUM(CASE WHEN t.type = 1 THEN t.amount ELSE 0 END), 0),
-                    COALESCE(SUM(CASE WHEN t.type = 0 THEN t.amount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.type = 1 AND t.category NOT IN (9, 16) THEN t.amount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.type = 0 AND t.category NOT IN (9, 16) THEN t.amount ELSE 0 END), 0),
                     YEAR(t.createdAt)
                 )
                 FROM Transaction t
@@ -167,6 +168,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
                   AND (:accountId IS NULL OR t.accountId = :accountId)
                   AND (:fromDate IS NULL OR t.createdAt >= :fromDate)
                   AND (:toDate IS NULL OR t.createdAt <= :toDate)
+                  AND t.category NOT IN (9, 16)
                 GROUP BY t.category
             """)
     List<CategoryReportItem> sumByCategory(
@@ -216,7 +218,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             FROM Transaction t
             WHERE t.userId = :userId
               AND t.type = :type
-              AND t.category != 16
+              AND t.category NOT IN (9, 16)
               AND t.createdAt BETWEEN :start AND :end
             ORDER BY t.amount DESC
             """)
@@ -331,7 +333,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             FROM Transaction t
             WHERE t.userId = :userId
               AND t.type = :type
-              AND t.category != 16
+              AND t.category NOT IN (9, 16)
               AND t.createdAt BETWEEN :start AND :end
             GROUP BY t.category
             """)
@@ -344,8 +346,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
     @Query(value = """
             SELECT
                 CAST(created_at AS date) AS tx_date,
-                COALESCE(SUM(CASE WHEN type = 1 AND category != 16 THEN amount ELSE 0 END), 0) AS income,
-                COALESCE(SUM(CASE WHEN type = 0 AND category != 16 THEN amount ELSE 0 END), 0) AS expense
+                COALESCE(SUM(CASE WHEN type = 1 AND category NOT IN (9, 16) THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN type = 0 AND category NOT IN (9, 16) THEN amount ELSE 0 END), 0) AS expense
             FROM transactions
             WHERE user_id = :userId
               AND created_at BETWEEN :start AND :end
@@ -375,8 +377,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     @Query(value = """
             SELECT
-                COALESCE(SUM(CASE WHEN type = 1 AND category != 16 THEN amount ELSE 0 END), 0) AS income,
-                COALESCE(SUM(CASE WHEN type = 0 AND category != 16 THEN amount ELSE 0 END), 0) AS expense
+                COALESCE(SUM(CASE WHEN type = 1 AND category NOT IN (9, 16) THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN type = 0 AND category NOT IN (9, 16) THEN amount ELSE 0 END), 0) AS expense
             FROM transactions
             WHERE user_id = :userId
               AND created_at BETWEEN :start AND :end
