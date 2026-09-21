@@ -68,16 +68,6 @@ public class TagController {
         }
 
         @PostMapping("/{id}")
-        @Operation(summary = "Cập nhật thông tin thẻ tag")
-        public ResponseEntity<AbstractResponse<TagResponse>> update(
-                        @PathVariable UUID id,
-                        @Valid @RequestBody TagRequest request,
-                        @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
-                return new AbstractResponse<TagResponse>()
-                                .withData(() -> tagService.updateTag(id, request, auth));
-        }
-
-        @PostMapping("/{id}")
         @Operation(summary = "Cập nhật thông tin thẻ tag qua POST")
         public ResponseEntity<AbstractResponse<TagResponse>> updatePost(
                         @PathVariable UUID id,
