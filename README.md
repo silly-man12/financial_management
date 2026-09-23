@@ -97,6 +97,22 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Loại trừ giao dịch nội bộ**: Báo cáo tài chính tự động loại trừ Chuyển khoản nội bộ (`Category = 16`) và Trả/thu nợ (`Category = 9`) để đảm bảo số liệu thu nhập và chi phí thực tế không bị tính trùng (double counting).
 - **Xuất file PDF**: Tự động tạo và xuất báo cáo tài chính dạng PDF chuyên nghiệp theo tháng và theo năm với iText.
 
+### 11. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
+- **Ghi chép giao dịch trong 3 giây bằng tin nhắn tự nhiên**:
+  - Nhập số tiền lẻ tùy ý bất kỳ: `32500 banh mi`, `127.500 sieu thi`, `45.5k cafe`, `+15tr luong`, `1.250.000 hoc phi`...
+  - Số tiền linh hoạt ở đầu hoặc cuối câu (`banh mi 32500`, `cafe 45.5k`).
+  - Tự động nhận diện danh mục tài chính thông minh qua từ khóa tiếng Việt không dấu/có dấu (Ăn uống, Di chuyển, Mua sắm, Tiện ích, Lương, Thưởng...).
+  - Tự động nhận diện và bóc tách ví thanh toán (`vcb`, `momo`, `zalopay`, `tiền mặt`, `mb`...), giữ phần ghi chú sạch đẹp.
+- **Bộ lệnh tra cứu tài chính nhanh**:
+  - `/sodu` hoặc `/balance`: Xem nhanh số dư từng ví và tổng tài sản hiện có.
+  - `/homnay` hoặc `/today`: Xem tổng số tiền đã tiêu hôm nay và chi tiết các khoản chi.
+  - `/thangnay` hoặc `/month`: Báo cáo tổng thu, tổng chi và thặng dư tích lũy trong tháng.
+  - `/vi` hoặc `/wallets`: Liệt kê danh sách các ví/tài khoản và từ khóa gợi nhớ.
+  - `/huy` hoặc `/undo`: Hoàn tác ngay giao dịch vừa nhập (tự động phục hồi số dư ví).
+  - `/link <email> <password>`: Liên kết an toàn tài khoản với Telegram Chat ID của bạn.
+- **Cơ chế Long Polling qua Java 21 HttpClient**:
+  - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
+
 ---
 
 ## 🛠️ Công nghệ sử dụng
@@ -116,6 +132,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 | **Mail Service** | Spring Boot Starter Mail | 3.5.5 | Gửi email khôi phục mật khẩu qua SMTP |
 | **Validation** | Jakarta Bean Validation | 3.5.5 | Kiểm tra tính hợp lệ của DTO request |
 | **Scheduling** | Spring `@Scheduled` | 3.5.5 | Cronjobs định kỳ cho giao dịch & tỷ giá |
+| **Telegram Bot** | Telegram Bot API / Java 21 `HttpClient` | - | Long Polling tự động, bóc tách NLP tiếng Việt |
 | **Tiện ích** | Lombok, Gson, Jackson | - | Giảm thiểu boilerplate code |
 
 ---
@@ -143,10 +160,11 @@ financial_management/
         │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse
         │   │   ├── repository/        # Spring Data JPA Repositories (TransactionRepository, ...)
         │   │   ├── services/          # Business Logic Services (TransactionService, ReportService...)
+        │   │   ├── telegram/          # Telegram Bot: Config, Client, PollingService, Parser, CommandHandler
         │   │   └── util/              # Tiện ích bổ trợ (JwtTokenUtil, DateTimeUtils...)
         │   └── resources/
         │       └── application.properties # Cấu hình Database, Mail, JWT, Cổng chạy...
-        └── test/                      # Unit & Integration Tests
+        └── test/                      # Unit & Integration Tests (TelegramMessageParserTest...)
 ```
 
 ---
@@ -205,6 +223,12 @@ app.upload.dir=images/
 email_admin=admin@example.com
 app.reset-password.url=http://localhost:8080/auth/reset-password
 app.verify-reset-password-url=http://localhost:5173/reset-password
+
+# Cấu hình Bot Telegram Cá Nhân (Tùy chọn)
+telegram.bot.enabled=true
+telegram.bot.token=your_telegram_bot_token_from_botfather
+telegram.bot.username=your_bot_username
+telegram.bot.default-user-email=admin@example.com
 ```
 
 ---
@@ -376,6 +400,12 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 | `POST` | `/reports/compare` | So sánh chi tiết biến động tài chính giữa tháng này với tháng trước |
 | `POST` | `/reports/export/month` | **Xuất file PDF** báo cáo tài chính hàng tháng |
 | `POST` | `/reports/export/year` | **Xuất file PDF** báo cáo tài chính hàng năm |
+
+### 11. Bot Telegram (`/telegram`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/telegram/test-parse?text={content}` | Public | Kiểm tra kết quả bóc tách cú pháp số tiền, danh mục và ví thanh toán |
+| `POST` | `/telegram/simulate?text={content}&email={e}` | Public | Giả lập gửi tin nhắn Telegram vào hệ thống (thực hiện ghi chép thật) |
 
 ---
 

@@ -32,4 +32,7 @@ public class User extends EntityBase {
 
     @Column(nullable = false)
     private int status = Status.ACTIVE;
+
+    @Column(name = "telegram_chat_id", nullable = true)
+    private Long telegramChatId;
 }

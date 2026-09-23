@@ -34,6 +34,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     Optional<Transaction> findByIdAndUserId(UUID id, UUID userId);
 
+    Optional<Transaction> findFirstByUserIdOrderByCreatedAtDesc(UUID userId);
+
     List<Transaction> findAllByUserIdAndType(UUID userId, int type);
 
     List<Transaction> findAllByAccountId(UUID accountId);
