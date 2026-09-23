@@ -22,13 +22,14 @@ import com.example.financial_management.services.TagService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/tags")
 @RequiredArgsConstructor
-@io.swagger.v3.oas.annotations.tags.Tag(name = "Tag API", description = "Tag Management for Transactions")
+@Tag(name = "Tag API", description = "Tag Management for Transactions")
 public class TagController {
 
         private final TagService tagService;
