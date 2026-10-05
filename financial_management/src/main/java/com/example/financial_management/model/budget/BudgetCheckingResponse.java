@@ -18,6 +18,7 @@ public class BudgetCheckingResponse {
     private BigDecimal spendingUsd;
     private BigDecimal overSpending;
     private BigDecimal overSpendingUsd;
+    private BigDecimal usedPercentage;
     private UUID tagId;
     private String tagName;
     private String tagColor;

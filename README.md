@@ -52,8 +52,9 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - Báo cáo và thống kê tổng hợp số tiền thu/chi theo từng thẻ tag cụ thể (`/tags/summary`).
 
 ### 5. 📊 Ngân sách Chi tiêu (Budgets)
-- Thiết lập hạn mức chi tiêu theo từng danh mục cho tháng/năm.
-- API đối soát ngân sách thông minh (`/budgets/checking`): Tự động tính toán số tiền đã chi, số dư còn lại và tỷ lệ phần trăm đã tiêu so với hạn mức để cảnh báo bội chi.
+- Thiết lập hạn mức chi tiêu theo từng danh mục hoặc gắn thẻ Tag cho tháng/năm.
+- API đối soát ngân sách chi tiết (`/budgets/checking`): Tự động tính toán số tiền đã chi, số dư còn lại, quy đổi USD và tỷ lệ phần trăm đã tiêu (`usedPercentage`) theo từng ngân sách cụ thể để cảnh báo bội chi.
+- API tổng hợp toàn bộ ngân sách (`/budgets/summary`): Tính toán tổng ngân sách, tổng chi tiêu thực tế, số dư còn lại, quy đổi USD và **tỷ lệ phần trăm (%) đã sử dụng trên tổng số tiền của tất cả ngân sách cộng lại**, kèm cờ cảnh báo vượt ngân sách tổng (`isOverBudget`).
 
 ### 6. 🔄 Giao dịch Định kỳ (Recurring Transactions)
 - Tự động hóa các khoản chi định kỳ (tiền nhà, hóa đơn điện nước, netflix...) hoặc thu định kỳ (lương, cổ tức...).
@@ -334,8 +335,9 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|
 | `GET` | `/budgets/all` | Lấy danh sách tất cả ngân sách đã tạo |
 | `GET` | `/budgets/{id}` | Xem chi tiết 1 ngân sách |
-| `GET` | `/budgets/checking?month={m}&year={y}` | Đối soát ngân sách: số tiền đã chi, số dư còn lại và tỷ lệ |
-| `POST` | `/budgets/create` | Thiết lập ngân sách mới cho danh mục |
+| `GET` | `/budgets/checking?month={m}&year={y}` | Đối soát chi tiết từng ngân sách: số tiền đã chi, số dư còn lại, quy đổi USD và % đã dùng |
+| `GET` | `/budgets/summary?month={m}&year={y}` | **Tổng hợp ngân sách & % đã sử dụng**: Tổng ngân sách, tổng chi tiêu, số dư còn lại, quy đổi USD và tỷ lệ % đã dùng trên tổng số tiền của tất cả các ngân sách cộng lại (mặc định lấy tháng/năm hiện tại nếu bỏ trống) |
+| `POST` | `/budgets/create` | Thiết lập ngân sách mới cho danh mục hoặc gắn thẻ Tag |
 | `POST` | `/budgets/update?budgetId={id}` | Chỉnh sửa hạn mức ngân sách |
 | `POST` | `/budgets/delete?budgetId={id}` | Xóa bỏ một ngân sách |
 
@@ -401,7 +403,7 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 | `POST` | `/reports/export/month` | **Xuất file PDF** báo cáo tài chính hàng tháng |
 | `POST` | `/reports/export/year` | **Xuất file PDF** báo cáo tài chính hàng năm |
 
-### 11. Bot Telegram (`/telegram`)
+### 12. Bot Telegram (`/telegram`)
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
 |---|---|---|---|
 | `GET` | `/telegram/test-parse?text={content}` | Public | Kiểm tra kết quả bóc tách cú pháp số tiền, danh mục và ví thanh toán |
@@ -509,6 +511,13 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 
 3. **Bảo vệ Lịch sử Liên kết (Protected History)**:
    - Các giao dịch được tạo ra tự động từ module Sổ nợ (`Debt`) hoặc Mục tiêu tiết kiệm (`SavingGoal`) được bảo vệ bằng cờ nhận diện. Người dùng không thể xóa hoặc sửa tùy tiện tại màn hình danh sách giao dịch thông thường mà phải thao tác trực tiếp qua module gốc để đảm bảo tính đồng bộ số dư.
+
+4. **Quy tắc Tính toán & Phân bổ Ngân sách (% Budget Used)**:
+   - Hệ thống tự động phân tách chi tiêu giữa ngân sách theo Danh mục và ngân sách theo Thẻ Tag (tự động loại trừ các Tag đã có ngân sách riêng trong cùng danh mục để tránh tính trùng chi tiêu).
+   - Tỷ lệ phần trăm ngân sách đã sử dụng cho từng mục và cho toàn bộ ngân sách tổng hợp được tính theo công thức:
+     $$\text{usedPercentage} = \frac{\text{totalSpending}}{\text{totalBudget}} \times 100\%$$
+     *(được làm tròn 2 chữ số thập phân theo quy tắc HALF_UP)*.
+   - Khi $\text{usedPercentage} > 100\%$ hoặc $\text{remainingAmount} < 0$, hệ thống tự động đánh dấu trạng thái "Vượt quá chi tiêu" và bật cờ cảnh báo bội chi `isOverBudget = true`.
 
 ---
 

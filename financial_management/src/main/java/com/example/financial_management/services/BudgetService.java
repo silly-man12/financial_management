@@ -1,6 +1,7 @@
 package com.example.financial_management.services;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,6 +23,7 @@ import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.budget.BudgetCheckingResponse;
 import com.example.financial_management.model.budget.BudgetRequest;
 import com.example.financial_management.model.budget.BudgetResponse;
+import com.example.financial_management.model.budget.BudgetSummaryResponse;
 import com.example.financial_management.repository.BudgetRepository;
 import com.example.financial_management.repository.TransactionRepository;
 
@@ -162,9 +164,54 @@ public class BudgetService {
                 response.setDescription("Trong giới hạn");
             }
 
+            BigDecimal usedPercentage = BigDecimal.ZERO;
+            if (budget.getAmount() != null && budget.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                usedPercentage = spending.multiply(BigDecimal.valueOf(100))
+                        .divide(budget.getAmount(), 2, RoundingMode.HALF_UP);
+            }
+            response.setUsedPercentage(usedPercentage);
+
             responses.add(response);
         }
         return responses;
+    }
+
+    public BudgetSummaryResponse getBudgetSummary(int month, int year, Auth auth) {
+        List<BudgetCheckingResponse> details = checkingBudget(month, year, auth);
+
+        BigDecimal totalBudget = BigDecimal.ZERO;
+        BigDecimal totalSpending = BigDecimal.ZERO;
+
+        for (BudgetCheckingResponse item : details) {
+            if (item.getAmount() != null) {
+                totalBudget = totalBudget.add(item.getAmount());
+            }
+            if (item.getSpending() != null) {
+                totalSpending = totalSpending.add(item.getSpending());
+            }
+        }
+
+        BigDecimal remainingAmount = totalBudget.subtract(totalSpending);
+        BigDecimal usedPercentage = BigDecimal.ZERO;
+        if (totalBudget.compareTo(BigDecimal.ZERO) > 0) {
+            usedPercentage = totalSpending.multiply(BigDecimal.valueOf(100))
+                    .divide(totalBudget, 2, RoundingMode.HALF_UP);
+        }
+
+        return BudgetSummaryResponse.builder()
+                .month(month)
+                .year(year)
+                .totalBudgets(details.size())
+                .totalBudgetAmount(totalBudget)
+                .totalBudgetAmountUsd(currencyExchangeService.toUsd(totalBudget))
+                .totalSpendingAmount(totalSpending)
+                .totalSpendingAmountUsd(currencyExchangeService.toUsd(totalSpending))
+                .remainingAmount(remainingAmount)
+                .remainingAmountUsd(currencyExchangeService.toUsd(remainingAmount))
+                .usedPercentage(usedPercentage)
+                .isOverBudget(remainingAmount.compareTo(BigDecimal.ZERO) < 0)
+                .details(details)
+                .build();
     }
 
     public BudgetResponse getBudgetById(UUID budgetId, Auth auth) {
