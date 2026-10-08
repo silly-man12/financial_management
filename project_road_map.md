@@ -1,235 +1,259 @@
-# 🗺️ Lộ Trình Phát Triển Dự Án (Personal Project Roadmap)
-## Hệ Thống Trợ Lý Tài Chính Cá Nhân (Personal Financial Management System)
+# 🗺️ Lộ Trình Phát Triển Backend & Hệ Thống API (Backend & API Roadmap)
+## Hệ Thống Trợ Lý Tài Chính Cá Nhân (Financial Management Backend API)
 
 > **Mục đích sử dụng**: Phục vụ riêng cá nhân (Private / Self-hosted / Single-User)  
-> **Phiên bản tài liệu**: 2.0.0 (Tối ưu hóa riêng cho nhu cầu cá nhân)  
+> **Phạm vi tài liệu**: Tập trung 100% vào **Kiến trúc Backend**, **Đặc tả API**, **Các cổng kết nối dịch vụ (Integrations)** và **Lộ trình nâng cấp Server** (Frontend Vue.js phát triển ở repository độc lập)  
+> **Backend Stack**: **Java 21** + **Spring Boot 3.5.5** + **MS SQL Server** + **Spring Security 6 (JWT)** + **Telegram Bot API**  
+> **Frontend kết nối**: Vue.js 3 + Vite (`http://localhost:5173`)  
+> **Phiên bản tài liệu**: 3.0.0 (Backend & API Focused)  
 > **Cập nhật lần cuối**: Tháng 10/2026  
-> **Trọng tâm cốt lõi**: **"Tối đa tự động hóa – Ghi chép siêu tốc – Quản lý Tài sản ròng (Net Worth) toàn diện"**
 
 ---
 
-## 🎯 1. Tầm Nhìn & Triết Lý Thiết Kế Cá Nhân
+## 🏗️ 1. Kiến Trúc Tổng Thể & Các Cổng Kết Nối Dịch Vụ (Architecture & Integrations)
 
-### 1.1. Tầm nhìn (Personal Vision)
-Xây dựng một **"Trung tâm Điều hành Tài chính Cá nhân" (Personal Finance Cockpit)** độc bản, may đo chính xác theo thói quen sinh hoạt và danh mục tài sản của bản thân. Hệ thống giúp tôi kiểm soát toàn diện dòng tiền, theo dõi tài sản ròng và tự động hóa tối đa việc ghi chép để không bao giờ bị nản hay quên ghi sổ.
-
-### 1.2. Triết lý thiết kế (Design Philosophy)
-1. **Không ma sát (Zero-Friction Input)**: Thao tác nhập liệu phải nhanh nhất có thể (chụp ảnh hóa đơn, gửi tin nhắn/voice Telegram, hoặc tự động bắt biến động số dư ngân hàng).
-2. **Dữ liệu thuộc về mình 100% (Data Sovereignty)**: Không lưu trữ tài chính nhạy cảm trên app bên thứ ba (Money Lover, Spendee...). Toàn bộ database nằm trên máy cá nhân hoặc VPS riêng, sao lưu tự động hàng ngày.
-3. **Tinh gọn, dễ tự vận hành (Lean & Low-Maintenance)**: Không ôm đồm các tính năng nhiều người dùng (SaaS, chia tiền nhóm, phân quyền phức tạp). Tập trung vào sự ổn định, mượt mà và phục vụ đúng nhu cầu của bản thân.
-4. **Theo dõi Tài sản ròng (Net Worth Focused)**: Không chỉ dừng lại ở thu chi hàng ngày, mà hướng tới quản lý bức tranh tài chính lớn (tiền tiết kiệm, các khoản nợ, tỷ giá ngoại tệ, vàng, danh mục đầu tư).
-
----
-
-## 🧭 2. Sơ Đồ Tổng Quan Lộ Trình Cá Nhân
+Backend đóng vai trò là **Bộ não trung tâm (Core Brain)** kết nối và xử lý dữ liệu giữa các dịch vụ ngoại vi và các client:
 
 ```mermaid
 flowchart TD
-    Phase1["<b>Giai Đoạn 1: Nền Tảng Backend & Bot Ghi Sổ</b><br/>Spring Boot 3 + SQL Server + Telegram Bot Long Polling<br/><i>(ĐÃ HOÀN TẤT 100%)</i>"]
-    Phase2["<b>Giai Đoạn 2: Giao Diện Dashboard Cá Nhân</b><br/>Web Cockpit (React/Next.js/PWA) tối ưu Desktop & Mobile<br/><i>(ĐANG TRIỂN KHAI - ƯU TIÊN CAO)</i>"]
-    Phase3["<b>Giai Đoạn 3: Tự Động Hóa Thông Minh & AI Trợ Lý</b><br/>Tự động khớp biến động ngân hàng (SePay/Casso) + AI OCR quét bill + Voice Note<br/><i>(KẾ HOẠCH Q1-Q2/2027)</i>"]
-    Phase4["<b>Giai Đoạn 4: Quản Lý Đầu Tư & Tài Sản Ròng (Net Worth)</b><br/>Theo dõi Vàng, Ngoại tệ, Cổ phiếu, Lãi suất tiết kiệm & Biểu đồ tăng trưởng tài sản<br/><i>(KẾ HOẠCH Q3/2027)</i>"]
-    Phase5["<b>Giai Đoạn 5: Đóng Gói Tự Vận Hành & Tự Động Backup</b><br/>Docker Compose, Deploy VPS cá nhân, Auto backup mã hóa lên Google Drive<br/><i>(HOÀN THIỆN TOÀN DIỆN)</i>"]
-
-    Phase1 --> Phase2
-    Phase2 --> Phase3
-    Phase3 --> Phase4
-    Phase4 --> Phase5
-```
-
----
-
-## 📊 3. Bảng Ma Trận Tiến Độ Cá Nhân
-
-| Giai Đoạn | Tên Giai Đoạn | Giá Trị Mang Lại Cho Cá Nhân | Trạng Thái | Tiến Độ |
-|:---:|:---|:---|:---:|:---:|
-| **Phase 1** | **Core Backend & Telegram Bot** | Sẵn sàng toàn bộ logic tài chính, bot chat ghi chi tiêu cực nhanh trong 3 giây | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
-| **Phase 2** | **Personal Web Cockpit (PWA)** | Giao diện trực quan xem dòng tiền, biểu đồ, ngân sách và sao kê mọi lúc mọi nơi | ![In Progress](https://img.shields.io/badge/Status-Đang%20Làm-blue) | **30%** |
-| **Phase 3** | **Tự Động Hóa & AI Trợ Lý** | Không cần nhập tay: Tự bắt thông báo ngân hàng, AI quét hóa đơn, Voice-to-Text | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-orange) | **0%** |
-| **Phase 4** | **Quản Lý Tài Sản Ròng (Net Worth)** | Quản lý tiền gửi, vàng, nợ, ngoại tệ và biểu đồ gia tăng tài sản dài hạn | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
-| **Phase 5** | **Self-Hosting & Auto Backup** | Đóng gói Docker 1-click lên VPS cá nhân, tự động sao lưu dữ liệu bảo mật 100% | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
-
----
-
-## 🚀 4. Chi Tiết Kế Hoạch Từng Giai Đoạn
-
----
-
-### 🟢 GIAI ĐOẠN 1: Nền Tảng Backend, Nghiệp Vụ & Bot Telegram
-> **Trạng thái**: Đã hoàn thành (100% Core Ready)  
-> **Mục tiêu**: Xây dựng toàn bộ khung xử lý nghiệp vụ tài chính chuẩn xác trên Java 21 & Spring Boot 3, tích hợp Bot Telegram chạy Long Polling để ghi chép hàng ngày.
-
-#### ✅ Đã hoàn thiện và đưa vào sử dụng:
-- [x] **Cơ sở dữ liệu & Ràng buộc toàn vẹn**:
-  - Lưu trữ dữ liệu trên MS SQL Server, bảo vệ số dư bằng giao dịch nguyên tử `@Transactional`.
-  - Không cho phép xóa nhầm ví nếu đã có lịch sử giao dịch sao kê.
-- [x] **Quản lý toàn bộ Ví & Tài khoản cá nhân**:
-  - Tiền mặt, Thẻ ngân hàng, Ví MoMo/ZaloPay, Thẻ tín dụng, Quỹ tiết kiệm, v.v.
-- [x] **Ghi chép Thu – Chi – Chuyển khoản nội bộ**:
-  - Hỗ trợ lưu trữ ảnh hóa đơn đính kèm.
-  - Tự động hoàn tác (revert) số dư chuẩn xác khi xóa hoặc sửa giao dịch.
-  - Hỗ trợ thẻ Tag để phân loại chi tiêu chi tiết theo sự kiện/dự án cá nhân.
-- [x] **Ngân sách cá nhân (Budgets)**:
-  - Giới hạn chi tiêu theo danh mục (Ăn uống, Mua sắm...) hoặc theo Tag.
-  - Tự động tính tỷ lệ `%` đã tiêu và cờ cảnh báo vượt ngân sách.
-- [x] **Mục tiêu Tiết kiệm (Saving Goals)**:
-  - Tạo mục tiêu (Mua xe, Quỹ khẩn cấp...), ghi nhận nạp/rút từ ví, tự động đổi trạng thái khi đạt $100\%$.
-- [x] **Sổ Nợ Cá Nhân (Debt Management)**:
-  - Theo dõi tiền cho bạn bè/người thân mượn (Cho vay) hoặc tiền mình vay (Đi vay).
-  - Ghi nhận trả nợ theo đợt, tính ngày quá hạn, tính năng tất toán/miễn nợ.
-- [x] **Tác vụ tự động chạy ngầm (Cronjobs)**:
-  - Chi phí định kỳ (tiền trọ, netflix, hóa đơn điện nước) tự động cộng/trừ đúng hạn mỗi ngày.
-  - Tự động đồng bộ tỷ giá USD/VND trực tuyến hàng ngày.
-- [x] **Hệ thống Phân tích & Báo cáo Tài chính**:
-  - KPI Dashboard: Tổng thu, tổng chi, số tiền tiết kiệm ròng, tỷ lệ tiết kiệm (Savings Rate %).
-  - Tự động loại trừ chuyển khoản nội bộ và trả nợ để báo cáo không bị tính trùng (double-counting).
-  - Xuất báo cáo tài chính PDF chuyên nghiệp (tháng/năm).
-- [x] **Bot Telegram Ghi Sổ Cá Nhân Siêu Tốc (24/7)**:
-  - Chạy ngầm qua Java 21 HttpClient Long Polling (không cần mở port hay thuê tên miền).
-  - Gõ tin nhắn tự nhiên bóc tách số tiền lẻ, danh mục, ví: `35k cafe momo`, `15tr luong vcb`, `125.500 sieu thi`.
-  - Lệnh kiểm tra tài chính nhanh: `/sodu` (xem ví), `/homnay` (đã tiêu bao nhiêu), `/undo` (hoàn tác ngay nếu gõ nhầm).
-
----
-
-### 🔵 GIAI ĐOẠN 2: Web Cockpit Cá Nhân & Tối Ưu Mobile (PWA)
-> **Mục tiêu**: Xây dựng giao diện web trực quan, sang trọng, thiết kế theo chuẩn Dark Mode tài chính hiện đại để mở trên laptop khi xem báo cáo hoặc mở trên điện thoại (PWA) để thao tác nhanh.  
-> **Thời gian dự kiến**: Quý 4/2026
-
-```mermaid
-flowchart LR
-    subgraph UI ["Giao Diện Cá Nhân (Personal Web / PWA)"]
-        Dashboard["Dashboard Tổng Quan<br/>• Tổng tài sản hiện có<br/>• Dòng tiền thu/chi tháng<br/>• Biểu đồ Cashflow Trend"]
-        Wallets["Quản Lý Ví & Thẻ<br/>• Thẻ ngân hàng ảo trực quan<br/>• Chuyển tiền giữa các ví 1-click"]
-        Transactions["Sổ Thu Chi & Hóa Đơn<br/>• Bảng giao dịch có bộ lọc nhanh<br/>• Upload ảnh hóa đơn xem lại"]
-        BudgetGoals["Ngân Sách & Mục Tiêu<br/>• Thanh cảnh báo bội chi<br/>• Vòng tròn tiến độ tiết kiệm"]
-        Debts["Sổ Nợ Cá Nhân<br/>• Danh sách ai nợ mình / mình nợ ai<br/>• Nút bấm ghi nhận trả nợ"]
+    subgraph Clients ["Giao Diện & Kênh Tương Tác (Clients)"]
+        VueClient["Vue.js 3 Frontend App<br/>(Repo riêng - http://localhost:5173)"]
+        TeleUser["Người dùng qua Telegram App<br/>(Chat bot cá nhân 24/7)"]
     end
+
+    subgraph BackendCore ["Spring Boot 3.5.5 Core Backend (Port 8080)"]
+        Security["Spring Security 6 + AuthFilter (JWT)"]
+        Controllers["REST Controllers (12 Controllers)<br/>/auth, /accounts, /transactions, /budgets..."]
+        Services["Business Logic Services & Specifications"]
+        Cronjobs["Scheduled Cronjobs<br/>(Recurring TX, Currency, Daily Digest)"]
+        TelegramEngine["Telegram Bot Engine<br/>(Java 21 HttpClient Long Polling + NLP Parser)"]
+    end
+
+    subgraph DataLayer ["Lưu Trữ Dữ Liệu"]
+        Database[("MS SQL Server 2012+<br/>financial_management")]
+        Storage["Thư mục Images (Hóa đơn)"]
+    end
+
+    subgraph ExternalServices ["Dịch Vụ Ngoại Vi (External Services)"]
+        BankWebhook["Cổng Ngân Hàng Webhook<br/>(SePay / Casso / VietQR)"]
+        GeminiAI["Google Gemini Flash API<br/>(OCR Hóa Đơn & NLP Voice)"]
+        GmailSMTP["Gmail SMTP Server<br/>(Gửi mail reset mật khẩu)"]
+        ExchangeRate["Tỷ giá Trực Tuyến<br/>(Exchangerate-api USD/VND)"]
+        CloudDrive["Google Drive / Storage<br/>(Sao lưu DB định kỳ tự động)"]
+    end
+
+    VueClient <-->|RESTful API / JSON / Multipart| Security
+    TeleUser <-->|Telegram Bot API (Long Polling)| TelegramEngine
+    BankWebhook -->|Incoming Webhook (HMAC Signature)| Security
+    
+    Security --> Controllers
+    Controllers --> Services
+    TelegramEngine --> Services
+    Cronjobs --> Services
+    
+    Services <--> Database
+    Services <--> Storage
+    Services <-->|Google Gemini SDK / REST| GeminiAI
+    Services <-->|SMTP Port 587| GmailSMTP
+    Cronjobs <-->|HTTP REST| ExchangeRate
+    Cronjobs -.->|Auto Dump & Upload| CloudDrive
 ```
 
-#### Các hạng mục chi tiết:
-- [ ] **Công nghệ**: Next.js 14 / React 18, Tailwind CSS, Shadcn UI, Recharts / Chart.js, Lucide Icons.
-- [ ] **Màn hình Dashboard (Trung tâm tài chính cá nhân)**:
-  - Card tổng hợp: **Tổng giá trị tài sản hiện có (VND & USD)**, Thu nhập tháng, Chi tiêu tháng, Tỷ lệ tiết kiệm tháng này.
-  - Biểu đồ xu hướng dòng tiền (Cashflow Area Chart) theo từng ngày trong tháng.
-  - Biểu đồ cơ cấu chi tiêu (Donut Chart) với top 5 khoản tiêu tốn tiền nhiều nhất.
-  - Widget 6 giao dịch gần nhất & Danh sách số dư từng ví (VCB, MoMo, Tiền mặt...).
-- [ ] **Màn hình Quản lý Ví (My Wallets)**:
-  - Thiết kế các thẻ ví theo dạng Card ngân hàng đẹp mắt (hiển thị logo, số dư, loại ví).
-  - Thao tác chuyển tiền nội bộ nhanh giữa 2 ví (kèm tự động tính lại số dư).
-- [ ] **Màn hình Sổ Giao Dịch (Transactions)**:
-  - Danh sách phân trang mượt mà, tìm kiếm nhanh theo ghi chú, lọc theo ngày, theo danh mục hoặc theo thẻ tag.
-  - Xem lại ảnh chụp hóa đơn đính kèm trực tiếp trên giao diện.
-- [ ] **Màn hình Ngân Sách & Mục Tiêu Tiết Kiệm**:
-  - Progress bar đổi màu theo mức độ chi tiêu (Xanh $\rightarrow$ Vàng $\rightarrow$ Đỏ khi vượt hạn mức).
-  - Danh sách mục tiêu tiết kiệm kèm ngày dự kiến hoàn thành.
-- [ ] **Hỗ trợ PWA (Progressive Web App)**:
-  - Cài đặt trực tiếp lên màn hình chính điện thoại (iPhone / Android) như một ứng dụng native.
-  - Tải trang tức thì, giao diện tối ưu chạm vuốt (mobile-first).
+---
+
+## 📡 2. Bảng Đặc Tả Kết Nối Ngoại Vi (Integrations Contract)
+
+| Tên Dịch Vụ / Client | Phương Thức Kết Nối | Giao Thức / Cổng | Mục Đích Sử Dụng |
+|---|---|---|---|
+| **Frontend Vue.js** | RESTful HTTP / CORS | `http://localhost:5173` | Cung cấp toàn bộ dữ liệu giao dịch, ví, ngân sách, báo cáo tài chính qua chuẩn `AbstractResponse<T>`. |
+| **Telegram Bot API** | Long Polling | HTTPS qua `HttpClient` (Java 21) | Nhận lệnh chat ghi sổ nhanh, tra cứu số dư, hoàn tác giao dịch 24/7 mà không cần mở port modem. |
+| **Bank Webhooks** *(Phase 3)* | Inbound Webhook POST | `POST /api/v1/webhooks/bank` | Tự động bắt biến động số dư Vietcombank, MB, MoMo qua SePay/Casso (xác thực chữ ký bí mật HMAC). |
+| **Google Gemini API** *(Phase 3)* | Google Cloud REST / SDK | HTTPS API Key | AI OCR bóc tách ảnh hóa đơn (tổng tiền, danh mục, thời gian) và nhận diện giọng nói (Voice-to-Text). |
+| **Gmail SMTP** | JavaMailSender | SMTP `587` (TLS) | Gửi email khôi phục mật khẩu có mã token tạm thời hạn 15 phút. |
+| **Currency Exchange** | Open Exchange REST | HTTPS API | Đồng bộ tỷ giá ngoại tệ USD/VND tự động lưu vào DB mỗi ngày. |
+| **Google Drive Backup** *(Phase 5)* | Drive API v3 / Rclone CLI | Background Job | Sao lưu bản dump database mã hóa AES-256 lúc 02:00 sáng mỗi ngày. |
 
 ---
 
-### 🟡 GIAI ĐOẠN 3: Tự Động Hóa Tối Đa & AI Trợ Lý (Zero-Manual Input)
-> **Mục tiêu**: Loại bỏ hoàn toàn việc phải nhớ để nhập tay. Hệ thống tự động thu thập thông tin qua Ngân hàng, Camera AI và Giọng nói.  
-> **Thời gian dự kiến**: Quý 1 - Quý 2/2027
+## 📊 3. Ma Trận Lộ Trình Phát Triển Backend (Backend Roadmap Matrix)
 
-#### 1. Tự Động Bắt Biến Động Số Dư Ngân Hàng (Bank Webhooks)
-- **Cơ chế**: Tích hợp dịch vụ webhook cá nhân (như SePay / Casso hoặc đọc thông báo SMS/App ngân hàng).
-- **Trải nghiệm**:
-  - Khi quẹt thẻ, chuyển khoản ngân hàng hoặc nhận lương tại Vietcombank/MB:
-  - Webhook gửi dữ liệu về Backend `financial_management` $\rightarrow$ Hệ thống tự nhận diện ví, số tiền, ngày giờ $\rightarrow$ Tự động tạo giao dịch Thu/Chi tương ứng mà **không cần mở app**.
-  - Telegram Bot gửi ngay thông báo: *"Đã ghi nhận giao dịch chi 120.000đ từ ví VCB cho 'TIEN COM TRUA'!"*
-
-#### 2. AI OCR Đọc Hóa Đơn Tự Động (Smart Receipt Scanner)
-- **Cơ chế**: Tích hợp Google Gemini Flash API (chi phí siêu rẻ hoặc miễn phí với hạn mức cá nhân).
-- **Trải nghiệm**:
-  - Đi siêu thị, ăn nhà hàng chỉ cần chụp ảnh bill và gửi thẳng vào Bot Telegram hoặc Web App.
-  - Gemini AI phân tích hình ảnh và bóc tách tự động:
-    - Tổng số tiền thanh toán.
-    - Thời gian trên hóa đơn.
-    - Tên quán / siêu thị (VinMart, Circle K, Highlands...).
-    - Tự động gợi ý danh mục: Ăn uống (`Category 1`) hoặc Mua sắm (`Category 7`).
-  - Người dùng chỉ cần bấm nút "Xác nhận" là xong!
-
-#### 3. Voice-to-Text Ghi Chép Bằng Giọng Nói Trên Telegram
-- Bấm giữ nút ghi âm trên Telegram khi đang lái xe hoặc bận tay: *"Đổ xăng xe máy 70 ngàn bằng tiền mặt"*.
-- Backend tích hợp mô hình Whisper / Gemini Speech nhận diện giọng nói tiếng Việt $\rightarrow$ Bóc tách thành số tiền $70.000$, danh mục Di chuyển, ví Tiền mặt $\rightarrow$ Tự động lưu giao dịch.
-
-#### 4. Cố Vấn Tài Chính & Báo Cáo Định Kỳ Hàng Ngày
-- **Báo cáo 21:30 mỗi tối**: Bot Telegram tự động tổng hợp:
-  > *"Hôm nay bạn đã tiêu 215.000đ (3 giao dịch). Tuần này bạn còn 850.000đ trong ngân sách Ăn uống. Chúc bạn ngủ ngon!"*
-- **Cảnh báo thông minh**: Nhắc nhở khoản nợ sắp đến hạn, cảnh báo khi tốc độ chi tiêu trong tháng đang nhanh hơn 20% so với tháng trước.
+| Giai Đoạn | Tên Giai Đoạn | Trọng Tâm Backend & API | Trạng Thái | Tiến Độ |
+|:---:|:---|:---|:---:|:---:|
+| **Phase 1** | **Core Backend & Telegram Bot** | Xây dựng 12 Controllers, Entity, SQL Server, Auth JWT, Cronjobs, Telegram Bot | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
+| **Phase 2** | **Tối Ưu Hóa API Cho Frontend Vue.js** | CORS, Contract Response, API Widgets, Phân trang Specification, Swagger OpenAPI | ![In Progress](https://img.shields.io/badge/Status-Đang%20Làm-blue) | **80%** |
+| **Phase 3** | **Webhook Ngân Hàng & Tích Hợp AI** | Endpoint Webhook bắt số dư ngân hàng, Gemini Vision OCR đọc bill, Voice Whisper | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-orange) | **0%** |
+| **Phase 4** | **Backend Quản Lý Tài Sản Ròng (Net Worth)** | Entity & Service Vàng, Tiền gửi tiết kiệm kỳ hạn, Cổ phiếu, API Báo cáo Net Worth | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
+| **Phase 5** | **Tối Ưu Hiệu Năng, Caching & Auto-Backup** | Redis Cache, Flyway DB Migration, Docker Compose, Script Auto Backup mã hóa | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
 
 ---
 
-### 🟠 GIAI ĐOẠN 4: Quản Lý Danh Mục Đầu Tư & Tài Sản Ròng (Net Worth)
-> **Mục tiêu**: Mở rộng từ quản lý chi tiêu sinh hoạt thông thường sang quản lý bức tranh tài sản ròng lớn (Net Worth = Tổng Tài Sản - Tổng Nợ).  
-> **Thời gian dự kiến**: Quý 3/2027
+## 🚀 4. Chi Tiết Lộ Trình Backend & API
+
+---
+
+### 🟢 GIAI ĐOẠN 1: Nền Tảng Backend Cốt Lõi & Telegram Bot (Core Ready)
+> **Trạng thái**: Đã hoàn thành 100%  
+> **Mục tiêu**: Xây dựng toàn bộ nền móng dữ liệu, logic luân chuyển dòng tiền và bộ API chuẩn mực trên Spring Boot 3 & Java 21.
+
+#### ✅ Các module đã hoàn thiện:
+- [x] **Kiến trúc dữ liệu & Bảo mật cơ bản**:
+  - `User`, `Account`, `Transaction`, `Budget`, `Debt`, `DebtPayment`, `SavingGoal`, `SavingGoalContribution`, `Tag`, `CurrencyExchange`.
+  - Spring Security 6 với `AuthFilter` xác thực JWT stateless.
+  - Mã hóa mật khẩu nhiều lớp: BCrypt kết hợp Custom Salt độc lập.
+  - SMTP Mail service gửi link đặt lại mật khẩu với token tạm thời (15 phút).
+- [x] **Nghiệp vụ luân chuyển tiền nguyên tử (ACID `@Transactional`)**:
+  - Tự động cộng/trừ số dư ví khi tạo giao dịch Thu, Chi, Chuyển khoản nội bộ (`transfer`).
+  - Hoàn tác (revert) số dư chuẩn xác khi xóa hoặc sửa giao dịch.
+  - Chặn xóa ví nếu đã có lịch sử giao dịch.
+- [x] **Hệ thống phân tích báo cáo (Report Engine)**:
+  - Tự động loại trừ giao dịch chuyển khoản nội bộ (`Category 16`) và Trả nợ (`Category 9`) để chống tính trùng (double-counting).
+  - API trả về KPI (Tổng thu, tổng chi, net savings, savings rate %, quy đổi USD).
+  - API chuỗi điểm dữ liệu biểu đồ xu hướng dòng tiền theo ngày (`chartPoints`).
+  - Xuất báo cáo PDF tháng/năm qua iText.
+- [x] **Telegram Bot Long Polling**:
+  - Tự động lắng nghe cập nhật qua Java 21 `HttpClient` Long Polling không cần mở port modem.
+  - Bộ bóc tách NLP tiếng Việt thông minh cho số tiền lẻ, danh mục và tên ví.
+  - Các lệnh tra cứu nhanh: `/sodu`, `/homnay`, `/thangnay`, `/undo`.
+
+---
+
+### 🔵 GIAI ĐOẠN 2: Tối Ưu Hóa API Phục Vụ Frontend Vue.js
+> **Thời gian dự kiến**: Quý 4/2026 (Đang thực hiện)  
+> **Mục tiêu**: Đảm bảo các API endpoint, định dạng dữ liệu (DTO contract) và cơ chế bảo mật hoạt động ăn khớp 100% với Frontend Vue.js chạy tại `http://localhost:5173`.
+
+#### 1. Chuẩn Hóa API Contract & Cấu Hình Kết Nối (CORS & Auth):
+- [x] Cấu hình CORS trong `WebConfig.java` cho phép origin `http://localhost:5173` gọi API với đầy đủ các methods (`GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`).
+- [x] Chuẩn hóa toàn bộ cấu trúc phản hồi bọc trong vỏ `AbstractResponse<T>`:
+  ```json
+  {
+    "data": { ... },
+    "success": true,
+    "code": 200,
+    "message": null,
+    "executionTimeInSeconds": 0.015
+  }
+  ```
+- [ ] Bổ sung cơ chế xử lý lỗi nhất quán (`GlobalExceptionHandler`):
+  - Chuẩn hóa lỗi Validation (`MethodArgumentNotValidException`) trả về map chi tiết các trường bị lỗi để Form Vue.js hiển thị thông báo dưới từng ô input.
+  - Xử lý mã lỗi `401 Unauthorized` và `403 Forbidden` rõ ràng để Axios Interceptor của Vue tự động điều hướng sang trang đăng nhập.
+
+#### 2. Các API Phục Vụ Riêng Cho Giao Diện Vue.js Dashboard:
+- [x] `GET /accounts/all`: Trả về danh sách thẻ ví kèm số dư để hiển thị lên lưới thẻ card ngân hàng ảo.
+- [x] `GET /transactions/{accountId}/recent`: Lấy nhanh 6 giao dịch gần nhất của ví phục vụ widget trang chủ.
+- [x] `POST /transactions/filter`: Lọc nâng cao kết hợp phân trang (`PageResponse<TransactionResponse>`) hỗ trợ bảng dữ liệu Vue có thanh tìm kiếm, chọn khoảng ngày, chọn ví, chọn tag.
+- [x] `GET /budgets/checking`: Trả về số tiền đã chi, số dư còn lại và `% usedPercentage` để render thanh tiến độ Bootstrap/Vue đổi màu.
+- [x] `GET /reports/analytics`: Cung cấp 8 chỉ số KPI và danh sách `chartPoints` để component biểu đồ của Vue (Chart.js / ECharts) vẽ trực tiếp mà không cần tính toán lại ở frontend.
+- [x] `POST /reports/export/month` & `/reports/export/year`: Stream byte array file PDF để Vue tải về hoặc xem trước trực tiếp trên browser.
+
+#### 3. Upload File & Phục Vụ Ảnh Hóa Đơn Tĩnh:
+- [x] Endpoint `POST /transactions/create` và `POST /transactions/{id}` nhận file ảnh hóa đơn qua `multipart/form-data` (giới hạn 20MB).
+- [ ] Endpoint tĩnh phục vụ file ảnh hóa đơn: Cấu hình Spring Boot `ResourceHandler` để Vue App có thể hiển thị ảnh hóa đơn qua URL trực tiếp `http://localhost:8080/images/{filename}`.
+
+---
+
+### 🟡 GIAI ĐOẠN 3: Tích Hợp Webhooks Ngân Hàng & Dịch Vụ AI
+> **Thời gian dự kiến**: Quý 1 - Quý 2/2027  
+> **Mục tiêu**: Xây dựng các cổng kết nối API thông minh giúp tự động ghi nhận thu chi mà không cần người dùng nhập tay.
 
 ```mermaid
-flowchart TD
-    Assets["TỔNG TÀI SẢN (Assets)<br/>• Tiền mặt & Số dư ngân hàng<br/>• Sổ tiết kiệm có kỳ hạn<br/>• Vàng miếng / Vàng nhẫn<br/>• Cổ phiếu / Chứng chỉ quỹ<br/>• Khoản cho người khác vay"]
-    Debts["TỔNG NỢ PHẢI TRẢ (Debts)<br/>• Dư nợ thẻ tín dụng<br/>• Khoản vay cá nhân"]
-    NetWorth["TÀI SẢN RÒNG (NET WORTH)<br/>= Assets - Debts"]
-    
-    Assets --> NetWorth
-    Debts --> NetWorth
+sequenceDiagram
+    autonumber
+    actor User as Bạn (Chủ tài khoản)
+    participant Bank as Ngân hàng (VCB/MB/MoMo)
+    participant WebhookGate as Dịch Vụ Webhook (SePay/Casso)
+    participant Backend as Spring Boot Backend
+    participant DB as MS SQL Server
+    participant TeleBot as Telegram Bot
+
+    User->>Bank: Quẹt thẻ / Chuyển khoản (vd: 50.000đ cà phê)
+    Bank-->>WebhookGate: Bắn thông báo biến động số dư
+    WebhookGate->>Backend: POST /api/v1/webhooks/bank (kèm Chữ ký HMAC)
+    Backend->>Backend: Xác thực chữ ký & Bóc tách nội dung giao dịch
+    Backend->>Backend: Tự động map ví & danh mục tài chính
+    Backend->>DB: Ghi Transaction & Cập nhật số dư ví (@Transactional)
+    Backend->>TeleBot: Gửi thông báo xác nhận giao dịch thành công
+    TeleBot-->>User: Tin nhắn: "Đã ghi nhận 50.000đ từ VCB: 'HIGHLANDS'!"
 ```
 
-#### Các hạng mục chi tiết:
-- [ ] **Module Tài Sản Đầu Tư (Investment Portfolio)**:
-  - **Vàng**: Lưu trữ số lượng (chỉ/lượng), giá mua vào; tự động cập nhật giá vàng SJC/Doji hàng ngày để tính lãi/lỗ danh nghĩa.
-  - **Tiền gửi tiết kiệm (Term Deposits)**: Quản lý kỳ hạn gửi (3 tháng, 6 tháng, 1 năm), lãi suất `%`, tự tính ngày đáo hạn và số tiền lãi dự kiến nhận được.
-  - **Chứng khoán / Quỹ (Stocks / Funds)**: Quản lý danh mục mã cổ phiếu, giá vốn, cập nhật lãi/lỗ (PnL) theo thị trường.
-- [ ] **Báo cáo Biến Động Tài Sản Ròng (Net Worth Growth)**:
-  - Biểu đồ tăng trưởng tài sản ròng theo tháng/quý/năm.
-  - Đo lường mức độ tự do tài chính: Tính toán số tháng có thể sinh sống dựa trên quỹ khẩn cấp hiện có mà không cần đi làm.
+#### Các hạng mục API & Backend chi tiết:
+- [ ] **Module Webhook Tiếp Nhận Biến Động Số Dư Ngân Hàng (`BankWebhookController`)**:
+  - Endpoint `POST /api/v1/webhooks/bank` tiếp nhận payload thông báo chuyển khoản/trừ tiền từ SePay/Casso.
+  - **Bảo mật Webhook**: Kiểm tra chữ ký bí mật (HMAC SHA-256 header) để đảm bảo request gửi đến thực sự từ dịch vụ ngân hàng, chặn tấn công giả mạo dữ liệu.
+  - **Quy tắc phân loại tự động**: Bóc tách nội dung chuyển khoản để nhận diện mã ví (VCB, MB, Techcombank) và tự động gắn danh mục chi tiêu/thu nhập.
+- [ ] **Tích hợp Google Gemini Flash API cho OCR Hóa Đơn (`GeminiAiService`)**:
+  - Tạo service gọi Gemini 1.5 Flash Vision API qua REST/SDK.
+  - Endpoint `POST /transactions/scan-receipt`: Tiếp nhận file ảnh hóa đơn $\rightarrow$ Gửi lên Gemini kèm structured prompt (JSON Schema) $\rightarrow$ Trả về JSON chuẩn hóa: `{ amount: 154000, date: "2026-10-08", merchant: "WinMart", suggestedCategory: 1, note: "Mua thuc pham" }`.
+- [ ] **Tích hợp Nhận Diện Giọng Nói (Speech-to-Text Service)**:
+  - Telegram bot nhận file tin nhắn thoại `.oga` $\rightarrow$ Backend chuyển đổi sang text qua OpenAI Whisper hoặc Gemini Audio $\rightarrow$ Chuyển văn bản qua `TelegramMessageParser` để tự động tạo giao dịch.
+- [ ] **Cronjob Thông Báo & Cảnh Báo Tài Chính Cá Nhân**:
+  - Tác vụ định kỳ quét lúc `21:30` mỗi tối: Tổng hợp thu chi trong ngày và gửi bản tin tóm tắt qua Bot Telegram.
+  - Cảnh báo tự động gửi qua Telegram ngay khi một danh mục chi tiêu vượt quá $90\%$ ngân sách đã đề ra.
 
 ---
 
-### 🟣 GIAI ĐOẠN 5: Tự Vận Hành Cá Nhân, Docker Hóa & Auto Backup
-> **Mục tiêu**: Toàn bộ hệ thống chạy tự động, độc lập, bảo mật tối đa và không lo mất dữ liệu.  
-> **Thời gian dự kiến**: Quý 4/2027
+### 🟠 GIAI ĐOẠN 4: Backend Quản Lý Danh Mục Đầu Tư & Tài Sản Ròng (Net Worth API)
+> **Thời gian dự kiến**: Quý 3/2027  
+> **Mục tiêu**: Mở rộng các thực thể (Entities) và APIs để quản lý bức tranh tài sản ròng lớn (Net Worth = Tổng Tài Sản - Tổng Nợ).
 
-#### Các hạng mục chi tiết:
-- [ ] **Docker Compose 1-Click Deployment**:
-  - Đóng gói toàn bộ: Spring Boot App + MS SQL Server / PostgreSQL + Web Frontend + Nginx SSL trong 1 file `docker-compose.yml`.
-  - Có thể chạy trên máy tính cá nhân ở nhà (Homelab / Mini PC) hoặc thuê 1 VPS giá rẻ (Cloud Server).
-- [ ] **Hệ Thống Tự Động Sao Lưu Dữ Liệu Cá Nhân (Auto Backup & Encryption)**:
-  - Cronjob lúc `02:00 sáng`: Tự động dump toàn bộ Database `financial_management`.
-  - Nén file backup bằng 7zip với mật khẩu mã hóa AES-256.
-  - Tự động đẩy file backup lên Google Drive cá nhân hoặc gửi thẳng file nén về kênh Telegram Private riêng của bạn.
-  - Đảm bảo dù máy chủ hỏng ổ cứng, dữ liệu vẫn được bảo toàn $100\%$.
-- [ ] **Bảo Mật Cá Nhân**:
-  - Giới hạn quyền truy cập quản trị qua VPN nội bộ (Tailscale / WireGuard) hoặc xác thực 2 lớp (2FA qua Google Authenticator).
+#### 1. Thiết Kế Entity & Bảng CSDL Mới:
+- `GoldAsset`: Quản lý vàng (Loại vàng: SJC, Nhẫn 9999; Số chỉ/lượng; Giá mua vào; Ngày mua).
+- `TermDeposit`: Quản lý sổ tiết kiệm có kỳ hạn (Số tiền gốc, Kỳ hạn tháng, Lãi suất %/năm, Ngày gửi, Ngày đáo hạn, Phương thức tái tục: Gốc + Lãi hoặc Chỉ gốc).
+- `StockAsset`: Quản lý cổ phiếu/chứng chỉ quỹ (Mã CK, Số lượng, Giá vốn trung bình).
+- `NetWorthSnapshot`: Bảng lưu vết lịch sử tổng tài sản ròng theo từng mốc thời gian để vẽ đồ thị tăng trưởng tài sản dài hạn.
+
+#### 2. Dịch Vụ Thu Thập Giá Thị Trường Tự Động:
+- Cronjob định kỳ hàng ngày fetch giá vàng SJC/Doji và chỉ số giá cổ phiếu để cập nhật định giá danh mục đầu tư theo giá thị trường (Mark-to-Market).
+
+#### 3. Danh Sách Endpoint Mới (Net Worth API):
+- `GET /net-worth/summary`: Trả về tổng giá trị tài sản ròng hiện tại (tiền mặt + ngân hàng + tiết kiệm + vàng + đầu tư - nợ phải trả).
+- `GET /net-worth/history?period=1y`: Lấy chuỗi dữ liệu lịch sử biến động tài sản ròng theo tháng để vẽ biểu đồ tăng trưởng tài sản trên Frontend.
+- `GET /investments/gold/all`: Danh sách các chỉ/lượng vàng đang sở hữu kèm giá trị thị trường và lãi/lỗ tạm tính.
+- `GET /investments/deposits/all`: Danh sách sổ tiết kiệm, tính toán số tiền lãi tích lũy dự kiến tới ngày đáo hạn.
 
 ---
 
-## 📅 5. Bảng Tóm Tắt Các Mốc Phiên Bản Cá Nhân (Personal Milestones)
+### 🟣 GIAI ĐOẠN 5: Tối Ưu Hạ Tầng, Caching, Docker & Tự Động Sao Lưu (DevOps & Self-Hosting)
+> **Thời gian dự kiến**: Quý 4/2027  
+> **Mục tiêu**: Đóng gói toàn bộ Backend thành khối độc lập, hiệu năng cao, dễ deploy lên máy chủ cá nhân (VPS / Mini PC) và tự động sao lưu dữ liệu tuyệt đối an toàn.
 
-| Phiên Bản | Mốc Dự Kiến | Mục Tiêu Chính Phục |
+#### 1. Bộ Nhớ Đệm (Caching với Redis):
+- Tích hợp `spring-boot-starter-data-redis`.
+- Caching tỷ giá ngoại tệ USD/VND và giá vàng để tránh gọi API ngoài liên tục.
+- Caching các báo cáo tài chính của các tháng cũ (vì dữ liệu tháng cũ đã chốt sổ, ít biến động).
+- Triển khai Redis Token Blacklist phục vụ API Đăng xuất (`POST /auth/logout`) hủy hiệu lực JWT token ngay lập tức.
+
+#### 2. Quản Lý Phiên Bản Database (Flyway):
+- Tích hợp Flyway Migration thay cho cơ chế `spring.jpa.hibernate.ddl-auto=update`.
+- Đảm bảo toàn bộ cấu trúc bảng, ràng buộc khóa ngoại, triggers (từ file `financial_management.sql`) được kiểm soát phiên bản qua các file script `V1__init.sql`, `V2__add_net_worth.sql`.
+
+#### 3. Đóng Gói Docker Compose:
+- Tạo `Dockerfile` đa tầng (multi-stage build):
+  - Stage 1: Build source bằng Maven JDK 21.
+  - Stage 2: Chạy trên Eclipse Temurin JRE 21 Alpine siêu nhẹ (dung lượng < 200MB).
+- Tạo file `docker-compose.yml` liên kết:
+  - `backend-app` (Spring Boot 3 - port 8080).
+  - `database` (MS SQL Server / PostgreSQL).
+  - `redis` (Cache & Token Blacklist - port 6379).
+
+#### 4. Kịch Bản Tự Động Sao Lưu Dữ Liệu An Toàn 100% (Auto Backup Script):
+- Tạo shell script / Cronjob chạy lúc `02:00 sáng`:
+  1. Dump toàn bộ database `financial_management`.
+  2. Nén file backup bằng thuật toán mã hóa AES-256 kèm mật khẩu bảo mật riêng.
+  3. Tự động upload file nén lên Google Drive cá nhân (qua Google Drive API / Rclone) hoặc đẩy về kênh Telegram Private riêng của bạn.
+  4. Tự động dọn dẹp các bản backup cũ hơn 30 ngày để tiết kiệm dung lượng.
+
+---
+
+## 📋 5. Kế Hoạch Phiên Bản Backend (Backend Release Milestones)
+
+| Phiên Bản | Mốc Thời Gian | Trọng Tâm Bàn Giao Backend |
 |---|:---:|---|
-| **v1.0.0** *(Hiện tại)* | 10/2026 | **Xong Backend Core**: 12 Controller, Bot Telegram bóc tách thu chi tiếng Việt 24/7, xuất PDF báo cáo. |
-| **v1.2.0** | 12/2026 | **Web Cockpit PWA**: Màn hình Dashboard trực quan, xem ví, lọc giao dịch, biểu đồ dòng tiền trên laptop & điện thoại. |
-| **v1.5.0** | 02/2027 | **Ngân Sách & Mục Tiêu Trực Quan**: Đầy đủ thanh đo ngân sách, tiến độ tiết kiệm, sổ nợ và xuất báo cáo so sánh tháng. |
-| **v2.0.0** | 05/2027 | **Tự Động Hóa Thông Minh**: Tự bắt biến động số dư ngân hàng (Vietcombank/MB), AI Gemini đọc hóa đơn từ ảnh chụp. |
-| **v2.5.0** | 08/2027 | **Quản Lý Tài Sản Ròng**: Theo dõi Vàng, Lãi tiết kiệm có kỳ hạn, Cổ phiếu và biểu đồ tăng trưởng Net Worth. |
-| **v3.0.0** | 11/2027 | **Hoàn Hảo Độc Bản**: Đóng gói Docker Compose lên VPS, Tự động mã hóa sao lưu DB lên Google Drive hàng đêm. |
+| **v1.0.0** *(Hiện tại)* | 10/2026 | **Hoàn thành Core Backend**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot long polling. |
+| **v1.1.0** | 11/2026 | **Tối ưu kết nối Vue Client**: Hoàn thiện CORS `5173`, chuẩn hóa Global Error Handler, API ảnh hóa đơn tĩnh, đồng bộ API contract. |
+| **v2.0.0** | 04/2027 | **Tự động hóa & AI Engine**: Endpoint Bank Webhook (SePay/Casso), Gemini Flash Vision OCR đọc hóa đơn, Speech-to-Text tin nhắn thoại. |
+| **v2.5.0** | 08/2027 | **Net Worth & Investment APIs**: Entity & API quản lý Vàng, Sổ tiết kiệm kỳ hạn, Lãi suất, Crawl giá thị trường, Biểu đồ Net Worth. |
+| **v3.0.0** | 11/2027 | **Production Ready & Self-Hosted**: Redis Caching, Flyway DB Migration, Docker Compose trọn bộ, Auto Backup database mã hóa lên Cloud. |
 
 ---
 
-## 💡 6. Thói Quen Vận Hành Hàng Ngày Đề Xuất Cho Cá Nhân
-
-1. **Khi phát sinh chi tiêu ngoài đường**:
-   - Gõ nhanh 1 dòng tin nhắn Telegram: `35k cafe momo` hoặc chụp ảnh hóa đơn gửi vào bot.
-2. **Khi chuyển khoản ngân hàng**:
-   - Hệ thống tự động bắt webhook và ghi nhận, bot gửi thông báo xác nhận.
-3. **Mỗi tối 21:30**:
-   - Xem nhanh tin nhắn tổng kết ngày từ Telegram bot để biết hôm nay đã tiêu bao nhiêu.
-4. **Cuối mỗi tuần / Cuối tháng**:
-   - Mở Web Dashboard trên laptop xem biểu đồ dòng tiền, đối soát ngân sách các danh mục và tải file PDF lưu trữ.
-5. **Đầu tháng mới**:
-   - Kiểm tra mục tiêu tiết kiệm, cập nhật số dư đầu tư và điều chỉnh ngân sách sinh hoạt cho tháng tiếp theo.
-
----
-
-> 📝 *Lộ trình này được thiết kế riêng cho bạn để đảm bảo tính thực tế, nhẹ nhàng và bền vững trong việc duy trì kỷ luật tài chính cá nhân lâu dài.*
+> 💡 *Tài liệu này là đặc tả kỹ thuật và lộ trình độc lập của Backend Spring Boot. Mọi cập nhật về API endpoints và schema sẽ được đồng bộ lên tài liệu Swagger UI tại `http://localhost:8080/swagger-ui/index.html`.*
