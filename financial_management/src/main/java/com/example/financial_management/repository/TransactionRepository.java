@@ -330,6 +330,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             """, nativeQuery = true)
     List<Object[]> sumTagStatsByUserId(@Param("userId") UUID userId);
 
+    @Query(value = """
+            SELECT
+                tt.tag_id,
+                COALESCE(SUM(CASE WHEN t.type = 0 AND t.category != 16 THEN t.amount ELSE 0 END), 0) AS total_expense,
+                COALESCE(SUM(CASE WHEN t.type = 1 AND t.category != 16 THEN t.amount ELSE 0 END), 0) AS total_income,
+                COUNT(t.id) AS tx_count
+            FROM transaction_tags tt
+            JOIN transactions t ON tt.transaction_id = t.id
+            WHERE t.user_id = :userId
+              AND (:startDate IS NULL OR t.created_at >= :startDate)
+              AND (:endDate IS NULL OR t.created_at <= :endDate)
+            GROUP BY tt.tag_id
+            """, nativeQuery = true)
+    List<Object[]> sumTagStatsByUserIdAndDateRange(
+            @Param("userId") UUID userId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
     @Query("""
             SELECT t.category, SUM(t.amount), COUNT(t.id)
             FROM Transaction t
