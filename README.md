@@ -49,7 +49,9 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 ### 4. 🏷️ Quản lý Thẻ Tag (Tags)
 - Khởi tạo và quản lý nhãn dán tùy chỉnh kèm mã màu sắc hiển thị.
 - Gắn nhiều thẻ tag vào một giao dịch thu chi.
-- Báo cáo và thống kê tổng hợp số tiền thu/chi theo từng thẻ tag cụ thể (`/tags/summary`).
+- Báo cáo và thống kê tổng hợp số tiền thu/chi, số dư ròng và số lượng giao dịch theo từng thẻ tag cụ thể (`/tags/summary`).
+- **Lọc theo khoảng thời gian linh hoạt**: Hỗ trợ tham số `startDate` và `endDate` (tự động nhận diện đa định dạng ngày giờ, hoán đổi hợp lệ nếu ngày bắt đầu lớn hơn ngày kết thúc).
+- **Loại trừ chuyển khoản nội bộ**: Thống kê tag tự động loại trừ giao dịch chuyển khoản (`Category = 16: Transfer`) để phản ánh chính xác thu chi thực tế.
 
 ### 5. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục hoặc gắn thẻ Tag cho tháng/năm.
@@ -324,11 +326,10 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|
 | `GET` | `/tags` hoặc `/tags/all` | Lấy danh sách tất cả các thẻ tag của người dùng |
 | `POST` | `/tags` hoặc `/tags/create` | Tạo mới một thẻ tag (tên thẻ, màu sắc hex code) |
-| `POST` | `/tags/{id}` | Cập nhật thông tin thẻ tag |
-| `POST` | `/tags/{id}` | Cập nhật thông tin thẻ tag (hỗ trợ alias qua POST) |
-| `DELETE`| `/tags/{id}` | Xóa thẻ tag |
-| `GET` | `/tags/summary` | Bảng tổng kết số tiền thu/chi theo từng thẻ tag |
-| `GET` | `/tags/{id}/summary` | Thống kê chi tiết thu chi của một thẻ tag cụ thể |
+| `POST` | `/tags/{id}` | Cập nhật thông tin thẻ tag (tên thẻ, màu sắc hex code) |
+| `DELETE`| `/tags/{id}` | Xóa thẻ tag (tự động gỡ liên kết khỏi các giao dịch) |
+| `GET` | `/tags/summary?startDate={d}&endDate={d}` | Bảng tổng kết số tiền chi tiêu, thu nhập, số dư ròng và số lượng giao dịch theo từng thẻ tag (hỗ trợ lọc theo khoảng ngày tùy chọn `yyyy-MM-dd`, tự động loại trừ chuyển khoản) |
+| `GET` | `/tags/{id}/summary` | Thống kê chi tiết thu chi, số dư ròng và số lượng giao dịch của một thẻ tag cụ thể |
 
 ### 6. Ngân sách (`/budgets`)
 | Method | Endpoint | Mô tả |
@@ -501,10 +502,11 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 
 ## 📊 Quy tắc Tính toán & Toàn vẹn Dữ liệu
 
-1. **Loại trừ Giao dịch Nội bộ & Nợ trong Báo cáo Doanh thu - Chi phí**:
+1. **Loại trừ Giao dịch Nội bộ & Nợ trong Báo cáo Doanh thu - Chi phí & Thống kê Tag**:
    - Các truy vấn tính toán Tổng Thu Nhập và Tổng Chi Tiêu trong hệ thống báo cáo tài chính (`ReportService` & `TransactionRepository`) luôn áp dụng điều kiện loại trừ:
      $$\text{category} \notin (9, 16)$$
-   - **Lý do**: Chuyển tiền giữa các ví cá nhân (`Category = 16: Transfer`) và Trả/Thu nợ (`Category = 9: Debt`) bản chất là luân chuyển dòng tiền giữa các tài sản, không phải là chi phí sinh hoạt hay nguồn thu nhập thuần túy. Việc loại trừ này giúp ngăn chặn hoàn toàn hiện tượng tính trùng (double-counting) và đảm bảo các chỉ số KPI, tỷ lệ tiết kiệm (Savings Rate) luôn chính xác 100%.
+   - Tương tự, thống kê tổng hợp theo thẻ tag (`TagService` & `TransactionRepository.sumTagStatsByUserIdAndDateRange`) cũng tự động loại trừ giao dịch chuyển khoản nội bộ (`category \ne 16: Transfer`).
+   - **Lý do**: Chuyển tiền giữa các ví cá nhân (`Category = 16: Transfer`) và Trả/Thu nợ (`Category = 9: Debt`) bản chất là luân chuyển dòng tiền giữa các tài sản, không phải là chi phí sinh hoạt hay nguồn thu nhập thuần túy. Việc loại trừ này giúp ngăn chặn hoàn toàn hiện tượng tính trùng (double-counting) và đảm bảo các chỉ số KPI, tỷ lệ tiết kiệm (Savings Rate) cũng như báo cáo thẻ tag luôn chính xác 100%.
 
 2. **Cơ chế Giao dịch Nguyên tử (ACID Transactional)**:
    - Các nghiệp vụ luân chuyển tiền (Tạo giao dịch, Chuyển khoản, Nạp/Rút quỹ tiết kiệm, Trả nợ) được đóng gói trong `@Transactional`. Nếu xảy ra lỗi ở bất kỳ bước nào, toàn bộ trạng thái sẽ tự động Rollback, đảm bảo số dư ví không bao giờ bị lệch.

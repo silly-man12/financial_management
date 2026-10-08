@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.financial_management.model.AbstractResponse;
@@ -90,9 +91,11 @@ public class TagController {
         @GetMapping("/summary")
         @Operation(summary = "Lấy bảng tổng hợp chi phí/thu nhập theo từng tag")
         public ResponseEntity<AbstractResponse<List<TagSummaryResponse>>> getSummaries(
+                        @Parameter(description = "Ngày bắt đầu (yyyy-MM-dd)", example = "2026-10-01") @RequestParam(required = false) String startDate,
+                        @Parameter(description = "Ngày kết thúc (yyyy-MM-dd)", example = "2026-10-31") @RequestParam(required = false) String endDate,
                         @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
                 return new AbstractResponse<List<TagSummaryResponse>>()
-                                .withData(() -> tagService.getTagsSummary(auth));
+                                .withData(() -> tagService.getTagsSummary(startDate, endDate, auth));
         }
 
         @GetMapping("/{id}/summary")

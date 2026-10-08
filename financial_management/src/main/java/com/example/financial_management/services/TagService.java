@@ -1,6 +1,9 @@
 package com.example.financial_management.services;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,6 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import com.example.financial_management.util.DateTimeUtils;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -117,9 +122,37 @@ public class TagService {
     }
 
     public List<TagSummaryResponse> getTagsSummary(Auth auth) {
+        return getTagsSummary(null, null, auth);
+    }
+
+    public List<TagSummaryResponse> getTagsSummary(String startDateStr, String endDateStr, Auth auth) {
         User user = validateUser(auth);
         List<Tag> tags = tagRepository.findAllByUserIdOrderByNameAsc(user.getId());
-        List<Object[]> stats = transactionRepository.sumTagStatsByUserId(user.getId());
+
+        LocalDateTime startDateTime = null;
+        LocalDateTime endDateTime = null;
+        LocalDate start = DateTimeUtils.parseFlexibleDate(startDateStr);
+        LocalDate end = DateTimeUtils.parseFlexibleDate(endDateStr);
+
+        if (start != null && end != null && start.isAfter(end)) {
+            LocalDate temp = start;
+            start = end;
+            end = temp;
+        }
+
+        if (start != null) {
+            startDateTime = start.atStartOfDay();
+        }
+        if (end != null) {
+            endDateTime = end.atTime(LocalTime.MAX);
+        }
+
+        List<Object[]> stats;
+        if (startDateTime != null || endDateTime != null) {
+            stats = transactionRepository.sumTagStatsByUserIdAndDateRange(user.getId(), startDateTime, endDateTime);
+        } else {
+            stats = transactionRepository.sumTagStatsByUserId(user.getId());
+        }
 
         Map<UUID, Object[]> statsMap = new HashMap<>();
         for (Object[] row : stats) {
