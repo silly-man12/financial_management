@@ -42,7 +42,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Thu / Chi / Chuyển khoản**:
   - Ghi nhận khoản Chi (`EXPENSE = 0`), Thu (`INCOME = 1`), Chuyển khoản giữa 2 ví (`TRANSFER = 2`).
   - Hỗ trợ chuyển tiền nội bộ giữa 2 tài khoản, tự động cập nhật số dư cả ví nguồn và ví đích.
-- **Hóa đơn đính kèm & Thẻ tag**: Tải lên ảnh hóa đơn / biên lai thanh toán (`multipart/form-data`, file tối đa 20MB) và gắn nhãn thẻ tag.
+- **Hóa đơn đính kèm & Thẻ tag**: Tải lên ảnh hóa đơn / biên lai thanh toán (`multipart/form-data`, file tối đa 20MB), tự động sinh đường dẫn ảnh đầy đủ (`imageUrl`) để Vue.js Client hiển thị trực tiếp qua endpoint tĩnh `/images/**`, và gắn nhãn thẻ tag.
 - **Linh hoạt định dạng ngày giờ**: Tự động parse đa định dạng thời gian (`yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd`, ISO OffsetDateTime).
 - **Lọc & Phân trang**: Tìm kiếm giao dịch nâng cao theo tài khoản, danh mục, khoảng tiền, thời gian thông qua Spring Data JPA Specification.
 - **API tiện ích widget**: Tra cứu nhanh 6 giao dịch gần nhất theo từng tài khoản (`GET /{accountId}/recent`).
@@ -227,6 +227,8 @@ spring.mail.properties.mail.smtp.starttls.required=true
 
 # Thư mục lưu file hóa đơn và đường dẫn liên kết
 app.upload.dir=images/
+app.base-url=http://localhost:8080
+app.cors.allowed-origins=http://localhost:5173,http://localhost:4173,http://localhost:8080
 email_admin=admin@example.com
 app.reset-password.url=http://localhost:8080/auth/reset-password
 app.verify-reset-password-url=http://localhost:5173/reset-password
@@ -413,6 +415,11 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|---|
 | `GET` | `/telegram/test-parse?text={content}` | Public | Kiểm tra kết quả bóc tách cú pháp số tiền, danh mục và ví thanh toán |
 | `POST` | `/telegram/simulate?text={content}&email={e}` | Public | Giả lập gửi tin nhắn Telegram vào hệ thống (thực hiện ghi chép thật) |
+
+### 13. Màn hình Tổng quan - Dashboard (`/dashboard`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/dashboard?month={m}&year={y}` | Authenticated | **Tổng hợp trọn bộ dữ liệu màn hình chính (Dashboard)**: Gom 5 khối dữ liệu gồm 8 chỉ số KPI tài chính, chuỗi điểm dữ liệu biểu đồ xu hướng ngày, danh sách thẻ ví & số dư, tổng hợp ngân sách sử dụng và 6 giao dịch gần đây nhất trong 1 request duy nhất (mặc định lấy tháng/năm hiện tại nếu bỏ trống). Giảm số lượng round-trip request từ Frontend Vue.js xuống tối thiểu. |
 
 ---
 

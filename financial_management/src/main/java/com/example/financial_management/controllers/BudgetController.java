@@ -15,6 +15,7 @@ import com.example.financial_management.services.BudgetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -76,7 +77,7 @@ public class BudgetController {
 
         // Tính năng tạo ngân sách mới
         @PostMapping("/create")
-        public ResponseEntity<AbstractResponse<BudgetResponse>> createBudget(@RequestBody BudgetRequest request,
+        public ResponseEntity<AbstractResponse<BudgetResponse>> createBudget(@Valid @RequestBody BudgetRequest request,
                         @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
                 return new AbstractResponse<BudgetResponse>()
                                 .withData(() -> budgetService.createBudget(request, auth));
@@ -85,7 +86,7 @@ public class BudgetController {
         // Cập nhật ngân sách theo ID
         @PostMapping("/update")
         public ResponseEntity<AbstractResponse<BudgetResponse>> updateBudget(@RequestParam UUID budgetId,
-                        @RequestBody BudgetRequest request,
+                        @Valid @RequestBody BudgetRequest request,
                         @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
                 return new AbstractResponse<BudgetResponse>()
                                 .withData(() -> budgetService.updateBudget(budgetId, request, auth));

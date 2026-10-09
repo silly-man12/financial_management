@@ -21,6 +21,7 @@ public class TransactionResponse {
     private int category;
     private String description;
     private String imagePath;
+    private String imageUrl;
     private boolean haveImage;
     private List<TagResponse> tags;
     private UUID transferId;

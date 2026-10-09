@@ -22,6 +22,7 @@ import com.example.financial_management.services.AccountService;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -32,14 +33,14 @@ public class AccountController {
     private final AccountService accountService;
 
     @PostMapping("/create")
-    public ResponseEntity<AbstractResponse<AccountResponse>> createAccount(@RequestBody AccountRequest request,
+    public ResponseEntity<AbstractResponse<AccountResponse>> createAccount(@Valid @RequestBody AccountRequest request,
             @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<AccountResponse>().withData(() -> accountService.createAccount(request, auth));
     }
 
     @PostMapping("/{id}")
     public ResponseEntity<AbstractResponse<AccountResponse>> updateAccount(@PathVariable("id") UUID accountId,
-            @RequestBody AccountRequest request, @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
+            @Valid @RequestBody AccountRequest request, @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<AccountResponse>()
                 .withData(() -> accountService.updateAccount(accountId, request, auth));
     }

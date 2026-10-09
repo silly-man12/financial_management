@@ -25,7 +25,7 @@ public class AuthController {
 
     @PostMapping("/signup")
     @Operation(summary = "Sign up")
-    public ResponseEntity<AbstractResponse<UserResponse>> signUp(@RequestBody UserSignUpRequest request) {
+    public ResponseEntity<AbstractResponse<UserResponse>> signUp(@Valid @RequestBody UserSignUpRequest request) {
         return new AbstractResponse<UserResponse>().withData(() -> userService.signUp(request));
     }
 
@@ -49,7 +49,7 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     @Operation(summary = "Quên mật khẩu - gửi email kèm reset token")
-    public ResponseEntity<AbstractResponse<String>> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<AbstractResponse<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return new AbstractResponse<String>().withData(() -> {
             userService.forgotPassword(request);
             return "Email hướng dẫn đặt lại mật khẩu đã được gửi.";

@@ -13,6 +13,7 @@ import java.util.UUID;
 import com.example.financial_management.model.report.response.CategoryDistribution;
 import com.example.financial_management.util.DateTimeUtils;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -69,6 +70,21 @@ public class ReportService {
         private final CurrencyExchangeService currencyExchangeService;
         private final PdfReportService pdfReportService;
 
+        @Value("${app.base-url:http://localhost:8080}")
+        private String baseUrl;
+
+        private String resolveImageUrl(String imagePath) {
+                if (imagePath == null || imagePath.isBlank()) {
+                        return null;
+                }
+                String cleanPath = imagePath.replace("\\", "/");
+                if (cleanPath.startsWith("/")) {
+                        cleanPath = cleanPath.substring(1);
+                }
+                String cleanBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+                return cleanBase + "/" + cleanPath;
+        }
+
         private TransactionResponse toEnrichedTransaction(Transaction transaction) {
                 return toEnrichedTransaction(transaction, currencyExchangeService.getCurrentRate());
         }
@@ -79,6 +95,7 @@ public class ReportService {
                         response.setExchangeRate(rate);
                         response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(),
                                         response.getCurrency(), rate));
+                        response.setImageUrl(resolveImageUrl(response.getImagePath()));
                 }
                 return response;
         }
