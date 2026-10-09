@@ -2,8 +2,8 @@ package com.example.financial_management.config;
 
 import com.example.financial_management.model.AbstractResponse;
 import com.example.financial_management.model.auth.Auth;
-import com.example.financial_management.util.GsonUtil;
 import com.example.financial_management.util.JwtTokenUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,6 +29,7 @@ import java.util.List;
 public class AuthFilter extends OncePerRequestFilter {
 
     private final JwtTokenUtil jwtTokenUtil;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -38,7 +39,7 @@ public class AuthFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer")) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             handleUnauthorized(response, "Authorization header missing or invalid format");
             return;
         }
@@ -83,8 +84,11 @@ public class AuthFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        String jsonResponse = GsonUtil.GSON.toJson(
-                new AbstractResponse<>().setSuccess(false).setMessage(message));
+        AbstractResponse<Void> errorResponse = new AbstractResponse<Void>()
+                .setSuccess(false)
+                .setCode(HttpServletResponse.SC_UNAUTHORIZED)
+                .setMessage(message);
+        String jsonResponse = objectMapper.writeValueAsString(errorResponse);
         response.getWriter().write(jsonResponse);
     }
 }

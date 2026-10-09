@@ -103,7 +103,7 @@ flowchart TD
 | Giai Đoạn | Tên Giai Đoạn | Trọng Tâm Backend & API | Trạng Thái | Tiến Độ |
 |:---:|:---|:---|:---:|:---:|
 | **Phase 1** | **Core Backend & Telegram Bot** | Xây dựng 12 Controllers, Entity, SQL Server, Auth JWT, Cronjobs, Telegram Bot | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
-| **Phase 2** | **Tối Ưu Hóa API Cho Frontend Vue.js** | CORS, Contract Response, API Widgets, Phân trang Specification, Swagger OpenAPI | ![In Progress](https://img.shields.io/badge/Status-Đang%20Làm-blue) | **80%** |
+| **Phase 2** | **Tối Ưu Hóa API Cho Frontend Vue.js** | CORS, Contract Response, API Widgets, Phân trang Specification, Swagger OpenAPI, Global Error Handling, Image URLs | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
 | **Phase 3** | **Webhook Ngân Hàng & Tích Hợp AI** | Endpoint Webhook bắt số dư ngân hàng, Gemini Vision OCR đọc bill, Voice Whisper | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-orange) | **0%** |
 | **Phase 4** | **Backend Quản Lý Tài Sản Ròng (Net Worth)** | Entity & Service Vàng, Tiền gửi tiết kiệm kỳ hạn, Cổ phiếu, API Báo cáo Net Worth | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
 | **Phase 5** | **Tối Ưu Hiệu Năng, Caching & Auto-Backup** | Redis Cache, Flyway DB Migration, Docker Compose, Script Auto Backup mã hóa | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
@@ -141,11 +141,11 @@ flowchart TD
 ---
 
 ### 🔵 GIAI ĐOẠN 2: Tối Ưu Hóa API Phục Vụ Frontend Vue.js
-> **Thời gian dự kiến**: Quý 4/2026 (Đang thực hiện)  
+> **Thời gian dự kiến**: Quý 4/2026 (Đã hoàn thành 100% ✅)  
 > **Mục tiêu**: Đảm bảo các API endpoint, định dạng dữ liệu (DTO contract) và cơ chế bảo mật hoạt động ăn khớp 100% với Frontend Vue.js chạy tại `http://localhost:5173`.
 
 #### 1. Chuẩn Hóa API Contract & Cấu Hình Kết Nối (CORS & Auth):
-- [x] Cấu hình CORS trong `WebConfig.java` cho phép origin `http://localhost:5173` gọi API với đầy đủ các methods (`GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`).
+- [x] Cấu hình CORS chặt chẽ trong `SecurityConfig.java` & `WebConfig.java` với danh sách whitelist origins cấu hình động qua `app.cors.allowed-origins` (`http://localhost:5173,http://localhost:4173,http://localhost:8080,http://127.0.0.1:5173`).
 - [x] Chuẩn hóa toàn bộ cấu trúc phản hồi bọc trong vỏ `AbstractResponse<T>`:
   ```json
   {
@@ -156,21 +156,26 @@ flowchart TD
     "executionTimeInSeconds": 0.015
   }
   ```
-- [ ] Bổ sung cơ chế xử lý lỗi nhất quán (`GlobalExceptionHandler`):
-  - Chuẩn hóa lỗi Validation (`MethodArgumentNotValidException`) trả về map chi tiết các trường bị lỗi để Form Vue.js hiển thị thông báo dưới từng ô input.
+- [x] Bổ sung cơ chế xử lý lỗi nhất quán (`GlobalExceptionHandler`):
+  - Chuẩn hóa lỗi Validation (`MethodArgumentNotValidException` và `@Valid` trên toàn bộ các Request DTOs: SignUp, ForgotPassword, Account, Budget, Transfer, UserProfile...) trả về HTTP 422 kèm map chi tiết các trường bị lỗi.
   - Xử lý mã lỗi `401 Unauthorized` và `403 Forbidden` rõ ràng để Axios Interceptor của Vue tự động điều hướng sang trang đăng nhập.
+  - Đồng bộ hóa toàn bộ response 401 từ `AuthFilter` qua Jackson `ObjectMapper` thay vì Gson.
+  - Ẩn hoàn toàn `stackTrace` trong các response lỗi môi trường production.
 
 #### 2. Các API Phục Vụ Riêng Cho Giao Diện Vue.js Dashboard:
+- [x] **`GET /dashboard?month={m}&year={y}` (Dashboard Aggregation API)**: API tổng hợp gom 5 khối dữ liệu trọng yếu (KPI 8 chỉ số, chart xu hướng theo ngày, danh sách thẻ ví, tổng hợp ngân sách sử dụng, và 6 giao dịch gần nhất) trong 1 request duy nhất để Vue render tức thì màn hình Dashboard.
 - [x] `GET /accounts/all`: Trả về danh sách thẻ ví kèm số dư để hiển thị lên lưới thẻ card ngân hàng ảo.
 - [x] `GET /transactions/{accountId}/recent`: Lấy nhanh 6 giao dịch gần nhất của ví phục vụ widget trang chủ.
 - [x] `POST /transactions/filter`: Lọc nâng cao kết hợp phân trang (`PageResponse<TransactionResponse>`) hỗ trợ bảng dữ liệu Vue có thanh tìm kiếm, chọn khoảng ngày, chọn ví, chọn tag.
 - [x] `GET /budgets/checking`: Trả về số tiền đã chi, số dư còn lại và `% usedPercentage` để render thanh tiến độ Bootstrap/Vue đổi màu.
+- [x] `GET /budgets/summary`: Tổng hợp ngân sách toàn kỳ và tỷ lệ đã dùng %.
 - [x] `GET /reports/analytics`: Cung cấp 8 chỉ số KPI và danh sách `chartPoints` để component biểu đồ của Vue (Chart.js / ECharts) vẽ trực tiếp mà không cần tính toán lại ở frontend.
 - [x] `POST /reports/export/month` & `/reports/export/year`: Stream byte array file PDF để Vue tải về hoặc xem trước trực tiếp trên browser.
 
 #### 3. Upload File & Phục Vụ Ảnh Hóa Đơn Tĩnh:
 - [x] Endpoint `POST /transactions/create` và `POST /transactions/{id}` nhận file ảnh hóa đơn qua `multipart/form-data` (giới hạn 20MB).
-- [ ] Endpoint tĩnh phục vụ file ảnh hóa đơn: Cấu hình Spring Boot `ResourceHandler` để Vue App có thể hiển thị ảnh hóa đơn qua URL trực tiếp `http://localhost:8080/images/{filename}`.
+- [x] Endpoint tĩnh phục vụ file ảnh hóa đơn: Cấu hình Spring Boot `ResourceHandler` để Vue App có thể hiển thị ảnh hóa đơn qua URL trực tiếp `http://localhost:8080/images/{filename}`, kèm trường `imageUrl` đầy đủ trong `TransactionResponse`.
+- [x] Hệ thống kiểm thử tự động (Unit Tests) bao phủ Exception Handling, Jackson Config, AuthFilter, Cors, ResourceHandler, AbstractResponse và Dashboard API với tỷ lệ đạt 100%.
 
 ---
 

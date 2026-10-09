@@ -66,6 +66,21 @@ public class TransactionService {
     @Value("${app.upload.dir}")
     private String uploadDir;
 
+    @Value("${app.base-url:http://localhost:8080}")
+    private String baseUrl;
+
+    private String resolveImageUrl(String imagePath) {
+        if (imagePath == null || imagePath.isBlank()) {
+            return null;
+        }
+        String cleanPath = imagePath.replace("\\", "/");
+        if (cleanPath.startsWith("/")) {
+            cleanPath = cleanPath.substring(1);
+        }
+        String cleanBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        return cleanBase + "/" + cleanPath;
+    }
+
     private TransactionResponse toEnrichedResponse(Transaction transaction) {
         return toEnrichedResponse(transaction, currencyExchangeService.getCurrentRate());
     }
@@ -75,6 +90,7 @@ public class TransactionService {
         if (response != null) {
             response.setExchangeRate(rate);
             response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency(), rate));
+            response.setImageUrl(resolveImageUrl(response.getImagePath()));
         }
         return response;
     }
@@ -89,6 +105,7 @@ public class TransactionService {
             response.setExchangeRate(rate);
             response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency(), rate));
             response.setDifference(finalDelta);
+            response.setImageUrl(resolveImageUrl(response.getImagePath()));
         }
         return response;
     }
@@ -170,6 +187,19 @@ public class TransactionService {
 
         return transactionRepository
                 .findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(account.getId(), user.getId())
+                .stream()
+                .map(tx -> this.toEnrichedResponse(tx, currentRate))
+                .toList();
+    }
+
+    public List<TransactionResponse> getRecentTransactions(Auth auth, int limit) {
+        User user = getUser(auth);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
+        int maxLimit = limit > 0 ? limit : 6;
+
+        return transactionRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(0, maxLimit))
+                .getContent()
                 .stream()
                 .map(tx -> this.toEnrichedResponse(tx, currentRate))
                 .toList();

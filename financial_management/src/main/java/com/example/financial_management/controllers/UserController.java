@@ -10,6 +10,7 @@ import com.example.financial_management.services.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -39,14 +40,16 @@ public class UserController {
     @PostMapping("/updateProfile")
     @Operation(summary = "Cập nhật thông tin người dùng hiện tại")
     public ResponseEntity<AbstractResponse<UserResponse>> updateProfile(
-            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth, @RequestBody ChangeNameRequest request) {
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
+            @Valid @RequestBody ChangeNameRequest request) {
         return new AbstractResponse<UserResponse>().withData(() -> userService.updateProfile(auth, request));
     }
 
     @PostMapping("/changePassword")
     @Operation(summary = "Đổi mật khẩu người dùng hiện tại")
     public ResponseEntity<AbstractResponse<UserResponse>> changePassword(
-            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth, @RequestBody ChangePasswordRequest request) {
+            @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
+            @Valid @RequestBody ChangePasswordRequest request) {
         return new AbstractResponse<UserResponse>().withData(() -> userService.changePassword(auth, request));
     }
 

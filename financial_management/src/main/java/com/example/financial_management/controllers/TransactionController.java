@@ -18,6 +18,7 @@ import com.example.financial_management.services.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -147,7 +148,7 @@ public class TransactionController {
         // Chuyển tiền giữa các tài khoản
         @PostMapping("/transfer")
         public ResponseEntity<AbstractResponse<TransactionResponse>> createTransfer(
-                        @RequestBody TransferRequest request,
+                        @Valid @RequestBody TransferRequest request,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<TransactionResponse>()
                                 .withData(() -> transactionService.createTransfer(request, auth));
