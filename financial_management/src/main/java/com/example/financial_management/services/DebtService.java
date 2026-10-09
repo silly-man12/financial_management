@@ -51,21 +51,29 @@ public class DebtService {
     private final CurrencyExchangeService currencyExchangeService;
 
     private DebtResponse toEnrichedResponse(Debt debt) {
+        return toEnrichedResponse(debt, currencyExchangeService.getCurrentRate());
+    }
+
+    private DebtResponse toEnrichedResponse(Debt debt, BigDecimal rate) {
         DebtResponse response = debtMapper.toResponse(debt);
         if (response != null) {
-            response.setInitialAmountUsd(currencyExchangeService.toUsd(response.getInitialAmount()));
-            response.setRemainingAmountUsd(currencyExchangeService.toUsd(response.getRemainingAmount()));
-            response.setPaidAmountUsd(currencyExchangeService.toUsd(response.getPaidAmount()));
+            response.setInitialAmountUsd(currencyExchangeService.toUsd(response.getInitialAmount(), rate));
+            response.setRemainingAmountUsd(currencyExchangeService.toUsd(response.getRemainingAmount(), rate));
+            response.setPaidAmountUsd(currencyExchangeService.toUsd(response.getPaidAmount(), rate));
             if (response.getPayments() != null) {
-                response.getPayments().forEach(this::enrichDebtPayment);
+                response.getPayments().forEach(p -> enrichDebtPayment(p, rate));
             }
         }
         return response;
     }
 
     private DebtPaymentResponse enrichDebtPayment(DebtPaymentResponse payment) {
+        return enrichDebtPayment(payment, currencyExchangeService.getCurrentRate());
+    }
+
+    private DebtPaymentResponse enrichDebtPayment(DebtPaymentResponse payment, BigDecimal rate) {
         if (payment != null) {
-            payment.setAmountUsd(currencyExchangeService.toUsd(payment.getAmount()));
+            payment.setAmountUsd(currencyExchangeService.toUsd(payment.getAmount(), rate));
         }
         return payment;
     }
@@ -73,8 +81,12 @@ public class DebtService {
     /**
      * 1. Lấy danh sách khoản nợ (hỗ trợ lọc theo type và/hoặc status)
      */
+    @Transactional
     public List<DebtResponse> getAll(Auth auth, Integer type, Integer status) {
         User user = getUser(auth);
+
+        // Batch update toàn bộ nợ quá hạn trực tiếp trong 1 query trước khi lấy danh sách
+        debtRepository.updateOverdueStatus(user.getId(), LocalDate.now(), DebtStatus.OVERDUE, DebtStatus.IN_PROGRESS);
 
         List<Debt> list;
         if (type != null && status != null) {
@@ -87,10 +99,9 @@ public class DebtService {
             list = debtRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId());
         }
 
-        // Tự động kiểm tra cập nhật quá hạn nếu cần
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
         return list.stream()
-                .map(this::checkAndMapOverdue)
-                .map(this::toEnrichedResponse)
+                .map(d -> this.toEnrichedResponse(d, currentRate))
                 .toList();
     }
 
@@ -175,7 +186,7 @@ public class DebtService {
         // Kiểm tra lại trạng thái quá hạn
         debt = checkAndMapOverdue(debt);
 
-        Debt saved = debtRepository.saveAndFlush(debt);
+        Debt saved = debtRepository.save(debt);
         return toEnrichedResponse(saved);
     }
 
@@ -270,7 +281,7 @@ public class DebtService {
                 + (reason != null && !reason.isBlank() ? ": " + reason : "") + "]";
         debt.setNote((existingNote.isEmpty() ? "" : existingNote + " | ") + settleInfo);
 
-        debtRepository.saveAndFlush(debt);
+        debtRepository.save(debt);
         log.info("Đã xóa nợ cho khoản nợ id={} (miễn {} đ, giữ nguyên số dư tài khoản)", id, remaining);
 
         return getById(id, auth);
@@ -341,7 +352,7 @@ public class DebtService {
             debt = checkAndMapOverdue(debt);
         }
 
-        debtRepository.saveAndFlush(debt);
+        debtRepository.save(debt);
 
         return getById(id, auth);
     }
@@ -390,7 +401,7 @@ public class DebtService {
 
         // 5. Xóa bản ghi payment
         debtPaymentRepository.delete(payment);
-        debtRepository.saveAndFlush(debt);
+        debtRepository.save(debt);
 
         return getById(debtId, auth);
     }

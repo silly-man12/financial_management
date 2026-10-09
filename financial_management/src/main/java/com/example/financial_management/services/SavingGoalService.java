@@ -53,20 +53,28 @@ public class SavingGoalService {
     private final CurrencyExchangeService currencyExchangeService;
 
     private SavingGoalResponse toEnrichedResponse(SavingGoal goal) {
+        return toEnrichedResponse(goal, currencyExchangeService.getCurrentRate());
+    }
+
+    private SavingGoalResponse toEnrichedResponse(SavingGoal goal, BigDecimal rate) {
         SavingGoalResponse response = savingGoalMapper.toResponse(goal);
         if (response != null) {
-            response.setTargetAmountUsd(currencyExchangeService.toUsd(response.getTargetAmount()));
-            response.setCurrentAmountUsd(currencyExchangeService.toUsd(response.getCurrentAmount()));
+            response.setTargetAmountUsd(currencyExchangeService.toUsd(response.getTargetAmount(), rate));
+            response.setCurrentAmountUsd(currencyExchangeService.toUsd(response.getCurrentAmount(), rate));
             if (response.getContributions() != null) {
-                response.getContributions().forEach(this::enrichContribution);
+                response.getContributions().forEach(c -> enrichContribution(c, rate));
             }
         }
         return response;
     }
 
     private SavingGoalContributionResponse enrichContribution(SavingGoalContributionResponse contribution) {
+        return enrichContribution(contribution, currencyExchangeService.getCurrentRate());
+    }
+
+    private SavingGoalContributionResponse enrichContribution(SavingGoalContributionResponse contribution, BigDecimal rate) {
         if (contribution != null) {
-            contribution.setAmountUsd(currencyExchangeService.toUsd(contribution.getAmount()));
+            contribution.setAmountUsd(currencyExchangeService.toUsd(contribution.getAmount(), rate));
         }
         return contribution;
     }
@@ -84,8 +92,9 @@ public class SavingGoalService {
             list = savingGoalRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId());
         }
 
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
         return list.stream()
-                .map(this::toEnrichedResponse)
+                .map(goal -> toEnrichedResponse(goal, currentRate))
                 .toList();
     }
 
@@ -195,7 +204,7 @@ public class SavingGoalService {
             savingGoal.setStatus(SavingGoalStatus.IN_PROGRESS);
         }
 
-        SavingGoal saved = savingGoalRepository.saveAndFlush(savingGoal);
+        SavingGoal saved = savingGoalRepository.save(savingGoal);
         return getById(saved.getId(), auth);
     }
 
@@ -237,7 +246,7 @@ public class SavingGoalService {
             log.info("Mục tiêu tiết kiệm id={} đã hoàn thành (đạt >= 100%)", savingGoal.getId());
         }
 
-        savingGoalRepository.saveAndFlush(savingGoal);
+        savingGoalRepository.save(savingGoal);
 
         // Lưu bản ghi lịch sử góp quỹ
         SavingGoalContribution contribution = new SavingGoalContribution();
@@ -296,7 +305,7 @@ public class SavingGoalService {
             savingGoal.setStatus(SavingGoalStatus.IN_PROGRESS);
         }
 
-        savingGoalRepository.saveAndFlush(savingGoal);
+        savingGoalRepository.save(savingGoal);
 
         // Lưu bản ghi lịch sử rút tiền
         SavingGoalContribution contribution = new SavingGoalContribution();
@@ -398,7 +407,7 @@ public class SavingGoalService {
         } else {
             savingGoal.setStatus(SavingGoalStatus.IN_PROGRESS);
         }
-        savingGoalRepository.saveAndFlush(savingGoal);
+        savingGoalRepository.save(savingGoal);
 
         // Xóa transaction sao kê tương ứng nếu có
         if (contribution.getTransactionId() != null) {

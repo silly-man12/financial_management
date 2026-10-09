@@ -34,10 +34,14 @@ public class AccountService {
     private final CurrencyExchangeService currencyExchangeService;
 
     private AccountResponse toEnrichedResponse(Account account) {
+        return toEnrichedResponse(account, currencyExchangeService.getCurrentRate());
+    }
+
+    private AccountResponse toEnrichedResponse(Account account, BigDecimal rate) {
         AccountResponse response = accountMapper.toResponse(account);
         if (response != null) {
-            response.setExchangeRate(currencyExchangeService.getCurrentRate());
-            response.setBalanceUsd(currencyExchangeService.calculateUsd(response.getBalance(), response.getCurrency()));
+            response.setExchangeRate(rate);
+            response.setBalanceUsd(currencyExchangeService.calculateUsd(response.getBalance(), response.getCurrency(), rate));
         }
         return response;
     }
@@ -83,7 +87,7 @@ public class AccountService {
         account.setDescription(request.getDescription());
         // account.setBalance(request.getInitialBalance());
 
-        Account saved = accountRepository.saveAndFlush(account);
+        Account saved = accountRepository.save(account);
 
         return toEnrichedResponse(saved);
     }
@@ -100,7 +104,7 @@ public class AccountService {
         }
 
         account.setStatus(status);
-        Account saved = accountRepository.saveAndFlush(account);
+        Account saved = accountRepository.save(account);
 
         return toEnrichedResponse(saved);
     }
@@ -169,8 +173,9 @@ public class AccountService {
     public List<AccountResponse> getAllAccounts(Auth auth) {
         User user = validateUser(auth);
         List<Account> accounts = accountRepository.findAllByUserId(user.getId());
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
         return accounts.stream()
-                .map(this::toEnrichedResponse)
+                .map(acc -> toEnrichedResponse(acc, currentRate))
                 .toList();
     }
 
@@ -208,7 +213,7 @@ public class AccountService {
         }
 
         account.setBalance(newBalance);
-        accountRepository.saveAndFlush(account);
+        accountRepository.save(account);
     }
 
     public BigDecimal calculateFinalDelta(Transaction transaction, TransactionRequest request) {
