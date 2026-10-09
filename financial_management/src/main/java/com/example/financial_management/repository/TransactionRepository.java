@@ -44,6 +44,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     List<Transaction> findAllByUserIdAndCurrency(UUID userId, int currency);
 
+    @EntityGraph(attributePaths = {"tags"})
     List<Transaction> findAllByUserIdAndCreatedAtBetween(
             UUID userId,
             LocalDateTime from,
@@ -59,6 +60,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
     @EntityGraph(attributePaths = {"tags"})
     List<Transaction> findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(UUID accountId, UUID userId);
 
+    @EntityGraph(attributePaths = {"tags"})
     List<Transaction> findAllByAccountIdAndUserId(UUID accountId, UUID userId);
 
     List<Transaction> findAllByAccountIdAndUserIdAndType(UUID accountId, UUID userId, int type);

@@ -67,19 +67,27 @@ public class TransactionService {
     private String uploadDir;
 
     private TransactionResponse toEnrichedResponse(Transaction transaction) {
+        return toEnrichedResponse(transaction, currencyExchangeService.getCurrentRate());
+    }
+
+    private TransactionResponse toEnrichedResponse(Transaction transaction, BigDecimal rate) {
         TransactionResponse response = transactionMapper.toResponse(transaction);
         if (response != null) {
-            response.setExchangeRate(currencyExchangeService.getCurrentRate());
-            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+            response.setExchangeRate(rate);
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency(), rate));
         }
         return response;
     }
 
     private TransactionUpdateResponse toEnrichedUpdateResponse(Transaction transaction, BigDecimal finalDelta) {
+        return toEnrichedUpdateResponse(transaction, finalDelta, currencyExchangeService.getCurrentRate());
+    }
+
+    private TransactionUpdateResponse toEnrichedUpdateResponse(Transaction transaction, BigDecimal finalDelta, BigDecimal rate) {
         TransactionUpdateResponse response = transactionMapper.toUpdateResponse(transaction);
         if (response != null) {
-            response.setExchangeRate(currencyExchangeService.getCurrentRate());
-            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+            response.setExchangeRate(rate);
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency(), rate));
             response.setDifference(finalDelta);
         }
         return response;
@@ -87,21 +95,23 @@ public class TransactionService {
 
     public List<TransactionResponse> getAllTransactions(Auth auth) {
         User user = getUser(auth);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
 
         return transactionRepository
                 .findByUserIdWithTagsOrderByCreatedAtDesc(user.getId())
                 .stream()
-                .map(this::toEnrichedResponse)
+                .map(tx -> this.toEnrichedResponse(tx, currentRate))
                 .toList();
     }
 
 
     public PageResponse<TransactionResponse> getAllTransactionsWithPage(Auth auth, Pageable pageable) {
         User user = getUser(auth);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
 
         Page<TransactionResponse> pageResult = transactionRepository
                 .findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
-                .map(this::toEnrichedResponse);
+                .map(tx -> this.toEnrichedResponse(tx, currentRate));
 
         return PageResponse.of(pageResult);
     }
@@ -109,6 +119,7 @@ public class TransactionService {
     public List<TransactionResponse> getByCategoryAndMonth(int category, String monthYear, Auth auth) {
         User user = getUser(auth);
         YearMonth ym = DateTimeUtils.parseYearMonth(monthYear);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
 
         return transactionRepository
                 .findAllByCategoryAndMonth(
@@ -118,7 +129,7 @@ public class TransactionService {
                         ym.getMonthValue(),
                         ym.getYear())
                 .stream()
-                .map(this::toEnrichedResponse)
+                .map(tx -> this.toEnrichedResponse(tx, currentRate))
                 .toList();
     }
 
@@ -144,9 +155,10 @@ public class TransactionService {
     public PageResponse<TransactionResponse> getTransactionByAccount(UUID accountId, Auth auth, Pageable pageable) {
         User user = getUser(auth);
         Account account = accountService.validateAccount(accountId, auth, Status.ACTIVE);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
         Page<TransactionResponse> pageResult = transactionRepository
                 .findByAccountIdAndUserId(account.getId(), user.getId(), pageable)
-                .map(this::toEnrichedResponse);
+                .map(tx -> this.toEnrichedResponse(tx, currentRate));
 
         return PageResponse.of(pageResult);
     }
@@ -154,11 +166,12 @@ public class TransactionService {
     public List<TransactionResponse> getRecentTransactionsByAccount(UUID accountId, Auth auth) {
         User user = getUser(auth);
         Account account = accountService.validateAccount(accountId, auth, Status.ACTIVE);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
 
         return transactionRepository
                 .findTop6ByAccountIdAndUserIdOrderByCreatedAtDesc(account.getId(), user.getId())
                 .stream()
-                .map(this::toEnrichedResponse)
+                .map(tx -> this.toEnrichedResponse(tx, currentRate))
                 .toList();
     }
 
@@ -266,7 +279,7 @@ public class TransactionService {
         validateCategory(updated.getType(), updated.getCategory());
         handleTransactionImage(transaction, updated.isHaveImage(), file);
 
-        Transaction saved = transactionRepository.saveAndFlush(transaction);
+        Transaction saved = transactionRepository.save(transaction);
 
         // Trả response có thêm finalDelta và quy đổi USD
         return toEnrichedUpdateResponse(saved, finalDelta);
@@ -425,6 +438,7 @@ public class TransactionService {
 
     public PageResponse<TransactionResponse> filterTransactions(Auth auth, TransactionFilterRequest filter) {
         User user = getUser(auth);
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
 
         Pageable pageable = PageRequest.of(
                 filter.getPage() - 1,
@@ -437,7 +451,7 @@ public class TransactionService {
                         filter),
                 pageable);
 
-        return PageResponse.of(result, this::toEnrichedResponse);
+        return PageResponse.of(result, tx -> this.toEnrichedResponse(tx, currentRate));
     }
 
     @Transactional

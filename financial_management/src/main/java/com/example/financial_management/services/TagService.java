@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -253,7 +252,9 @@ public class TagService {
             return new HashSet<>();
         }
 
-        Set<Tag> resolvedTags = new HashSet<>();
+        Set<UUID> inputIds = new HashSet<>();
+        Set<String> inputNames = new HashSet<>();
+
         for (String raw : rawTags) {
             if (raw == null)
                 continue;
@@ -261,29 +262,48 @@ public class TagService {
             if (clean.isBlank())
                 continue;
 
-            // Kiểm tra xem có phải UUID không
             try {
-                UUID tagId = UUID.fromString(clean);
-                Optional<Tag> tagById = tagRepository.findByIdAndUserId(tagId, userId);
-                if (tagById.isPresent()) {
-                    resolvedTags.add(tagById.get());
-                    continue;
-                }
+                inputIds.add(UUID.fromString(clean));
             } catch (IllegalArgumentException ignored) {
-                // Không phải UUID, tiếp tục tìm theo tên
+                inputNames.add(clean);
+            }
+        }
+
+        Set<Tag> resolvedTags = new HashSet<>();
+
+        // 1. Batch query các thẻ theo ID
+        if (!inputIds.isEmpty()) {
+            List<Tag> tagsById = tagRepository.findAllByUserIdAndIdIn(userId, inputIds);
+            resolvedTags.addAll(tagsById);
+        }
+
+        // 2. Batch query các thẻ theo Name
+        if (!inputNames.isEmpty()) {
+            List<Tag> tagsByName = tagRepository.findAllByUserIdAndNameIn(userId, inputNames);
+            Map<String, Tag> existingByName = new HashMap<>();
+            for (Tag t : tagsByName) {
+                existingByName.put(t.getName().toLowerCase(), t);
             }
 
-            Optional<Tag> tagByName = tagRepository.findByUserIdAndNameIgnoreCase(userId, clean);
-            if (tagByName.isPresent()) {
-                resolvedTags.add(tagByName.get());
-            } else {
-                Tag newTag = new Tag();
-                newTag.setUserId(userId);
-                newTag.setName(clean);
-                newTag.setColor(generateDefaultColor(clean));
-                resolvedTags.add(tagRepository.save(newTag));
+            List<Tag> newTagsToCreate = new ArrayList<>();
+            for (String name : inputNames) {
+                Tag existing = existingByName.get(name.toLowerCase());
+                if (existing != null) {
+                    resolvedTags.add(existing);
+                } else {
+                    Tag newTag = new Tag();
+                    newTag.setUserId(userId);
+                    newTag.setName(name);
+                    newTag.setColor(generateDefaultColor(name));
+                    newTagsToCreate.add(newTag);
+                    existingByName.put(name.toLowerCase(), newTag);
+                }
             }
 
+            if (!newTagsToCreate.isEmpty()) {
+                List<Tag> savedNewTags = tagRepository.saveAll(newTagsToCreate);
+                resolvedTags.addAll(savedNewTags);
+            }
         }
 
         return resolvedTags;

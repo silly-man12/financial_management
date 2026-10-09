@@ -44,9 +44,13 @@ public class RecurringTransactionService {
     private final PlatformTransactionManager transactionManager;
 
     private RecurringTransactionResponse toEnrichedResponse(RecurringTransaction entity) {
+        return toEnrichedResponse(entity, currencyExchangeService.getCurrentRate());
+    }
+
+    private RecurringTransactionResponse toEnrichedResponse(RecurringTransaction entity, BigDecimal rate) {
         RecurringTransactionResponse response = recurringTransactionMapper.toResponse(entity);
         if (response != null) {
-            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency()));
+            response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(), response.getCurrency(), rate));
         }
         return response;
     }
@@ -65,8 +69,9 @@ public class RecurringTransactionService {
             list = recurringTransactionRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId());
         }
 
+        BigDecimal currentRate = currencyExchangeService.getCurrentRate();
         return list.stream()
-                .map(this::toEnrichedResponse)
+                .map(entity -> toEnrichedResponse(entity, currentRate))
                 .toList();
     }
 
@@ -135,7 +140,7 @@ public class RecurringTransactionService {
                 request.getRecurrenceType(),
                 request.getRecurrenceInterval()));
 
-        RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
+        RecurringTransaction saved = recurringTransactionRepository.save(entity);
         return toEnrichedResponse(saved);
     }
 
@@ -155,7 +160,7 @@ public class RecurringTransactionService {
         }
 
         entity.setStatus(newStatus);
-        RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
+        RecurringTransaction saved = recurringTransactionRepository.save(entity);
         return toEnrichedResponse(saved);
     }
 
@@ -191,7 +196,7 @@ public class RecurringTransactionService {
                 txTemplate.executeWithoutResult(status -> {
                     createTransactionFromRecurring(recurring);
                     advanceNextExecutionDate(recurring);
-                    recurringTransactionRepository.saveAndFlush(recurring);
+                    recurringTransactionRepository.save(recurring);
                 });
             } catch (Exception e) {
                 log.error("Lỗi khi tự động thực thi recurring transaction id={}: {}", recurring.getId(), e.getMessage(), e);
@@ -217,7 +222,7 @@ public class RecurringTransactionService {
 
         createTransactionFromRecurring(entity);
         advanceNextExecutionDate(entity);
-        RecurringTransaction saved = recurringTransactionRepository.saveAndFlush(entity);
+        RecurringTransaction saved = recurringTransactionRepository.save(entity);
 
         return recurringTransactionMapper.toResponse(saved);
     }

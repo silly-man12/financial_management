@@ -29,9 +29,6 @@ public class AbstractResponse<T> {
     @Schema(description = "Response message")
     private String message;
 
-    @Schema(description = "Stack trace", example = "null")
-    private String stackTrace;
-
     @Schema(description = "Execution time in seconds", example = "null")
     private double executionTimeInSeconds;
 
@@ -39,35 +36,44 @@ public class AbstractResponse<T> {
     private List<ResponseError> errors;
 
     public ResponseEntity<AbstractResponse<T>> withData(Supplier<T> function) {
-        try {
-            long start = System.currentTimeMillis();
-            T data = function.get();
-            long processTime = System.currentTimeMillis() - start;
+        long start = System.currentTimeMillis();
+        T result = function.get();
+        long processTime = System.currentTimeMillis() - start;
 
-            if (processTime > 300) {
-                log.warn("{} ms to get {} from {}", processTime, getName(data), getName(function));
-            }
-
-            this.setExecutionTimeInSeconds(processTime / 1000.0);
-
-            if (data != null) {
-                this.setSuccess(true)
-                    .setData(data);
-            } else {
-                this.setSuccess(false)
-                    .setMessage("No data available");
-            }
-        } catch (Exception e) {
-            log.error("Get data failed", e);
-            this.setSuccess(false)
-                .setMessage(e.getMessage())
-                .setStackTrace(e.getStackTrace() != null ? e.toString() : "No stack trace available")
-                .setCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        if (processTime > 300) {
+            log.warn("{} ms to get {} from {}", processTime, getName(result), getName(function));
         }
 
+        this.setExecutionTimeInSeconds(processTime / 1000.0);
+
+        if (result != null) {
+            this.setSuccess(true)
+                .setCode(HttpStatus.OK.value())
+                .setData(result);
+        } else {
+            this.setSuccess(false)
+                .setCode(HttpStatus.NOT_FOUND.value())
+                .setMessage("No data available");
+        }
+
+        int httpStatus = this.isSuccess() ? HttpStatus.OK.value() : (this.getCode() != 0 ? this.getCode() : HttpStatus.NOT_FOUND.value());
         return ResponseEntity
-                .status(HttpStatus.OK)
+                .status(httpStatus)
                 .body(this);
+    }
+
+    public static <T> AbstractResponse<T> ok(T data) {
+        return new AbstractResponse<T>()
+                .setSuccess(true)
+                .setCode(HttpStatus.OK.value())
+                .setData(data);
+    }
+
+    public static <T> AbstractResponse<T> error(int code, String message) {
+        return new AbstractResponse<T>()
+                .setSuccess(false)
+                .setCode(code)
+                .setMessage(message);
     }
 
     private static String getName(Object o) {

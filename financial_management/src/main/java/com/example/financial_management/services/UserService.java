@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
@@ -83,6 +85,7 @@ public class UserService {
         return jwtTokenUtil.generateToken(auth);
     }
 
+    @Cacheable(value = "authenticatedUser", key = "#auth.id")
     public User getAuthenticatedUser(Auth auth) {
         if (auth == null || auth.getId() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa xác thực");
@@ -98,15 +101,17 @@ public class UserService {
         return userMapper.toResponse(user);
     }
 
+    @CacheEvict(value = "authenticatedUser", key = "#auth.id")
     public UserResponse updateProfile(Auth auth, ChangeNameRequest request) {
         User user = userRepository.findById(auth.getUUID())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         user.setName(request.getName());
-        User saved = userRepository.saveAndFlush(user);
+        User saved = userRepository.save(user);
         return userMapper.toResponse(saved);
     }
 
+    @CacheEvict(value = "authenticatedUser", key = "#auth.id")
     public UserResponse changePassword(Auth auth, ChangePasswordRequest request) {
         User user = userRepository.findById(auth.getUUID())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -121,7 +126,7 @@ public class UserService {
         user.setPasswordSalt(hashAndSalt.get("salt"));
         user.setPasswordHash(hashAndSalt.get("hash"));
 
-        User saved = userRepository.saveAndFlush(user);
+        User saved = userRepository.save(user);
 
         return userMapper.toResponse(saved);
     }
@@ -134,6 +139,7 @@ public class UserService {
                 .toList();
     }
 
+    @CacheEvict(value = "authenticatedUser", key = "#request.userId")
     public UserResponse updateStatusUser(Auth auth, ChangeUserStatusRequest request) {
         validateAdmin(auth);
         User user = userRepository.findById(request.getUserId())
@@ -144,7 +150,7 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Can't change status");
         } else {
             user.setStatus(request.getStatus());
-            User saved = userRepository.saveAndFlush(user);
+            User saved = userRepository.save(user);
             return userMapper.toResponse(saved);
         }
     }
@@ -193,6 +199,7 @@ public class UserService {
     /**
      * 3. API Đặt lại mật khẩu mới
      */
+    @CacheEvict(value = "authenticatedUser", allEntries = true)
     public UserResponse resetPassword(ResetPasswordRequest request) {
         // Validate Token
         if (request.getToken() == null || !jwtTokenUtil.validateResetPasswordToken(request.getToken())) {
@@ -213,7 +220,7 @@ public class UserService {
         user.setPasswordSalt(hashAndSalt.get("salt"));
         user.setPasswordHash(hashAndSalt.get("hash"));
 
-        User saved = userRepository.saveAndFlush(user);
+        User saved = userRepository.save(user);
         return userMapper.toResponse(saved);
     }
 

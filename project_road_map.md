@@ -12,52 +12,75 @@
 
 ## 🏗️ 1. Kiến Trúc Tổng Thể & Các Cổng Kết Nối Dịch Vụ (Architecture & Integrations)
 
-Backend đóng vai trò là **Bộ não trung tâm (Core Brain)** kết nối và xử lý dữ liệu giữa các dịch vụ ngoại vi và các client:
+Backend đóng vai trò là **Bộ não trung tâm (Core Brain)**, xây dựng theo mô hình **Kiến trúc Phân tầng (Layered Architecture)** kết hợp kiến trúc hướng sự kiện cho Telegram & Webhooks:
 
 ```mermaid
 flowchart TD
-    subgraph Clients ["Giao Diện & Kênh Tương Tác (Clients)"]
-        VueClient["Vue.js 3 Frontend App<br/>(Repo riêng - http://localhost:5173)"]
-        TeleUser["Người dùng qua Telegram App<br/>(Chat bot cá nhân 24/7)"]
+    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef security fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef controller fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    classDef service fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    classDef data fill:#ede7f6,stroke:#512da8,stroke-width:2px;
+    classDef external fill:#fbe9e7,stroke:#d84315,stroke-width:2px;
+
+    subgraph L1["1. Tầng Client & Kênh Tiếp Nhận (Inbound Layer)"]
+        VueClient["Vue.js 3 Client (Port 5173)"]:::client
+        TeleApp["Telegram User Chat (24/7)"]:::client
+        BankGate["Bank Webhook (SePay / Casso)"]:::client
     end
 
-    subgraph BackendCore ["Spring Boot 3.5.5 Core Backend (Port 8080)"]
-        Security["Spring Security 6 + AuthFilter (JWT)"]
-        Controllers["REST Controllers (12 Controllers)<br/>/auth, /accounts, /transactions, /budgets..."]
-        Services["Business Logic Services & Specifications"]
-        Cronjobs["Scheduled Cronjobs<br/>(Recurring TX, Currency, Daily Digest)"]
-        TelegramEngine["Telegram Bot Engine<br/>(Java 21 HttpClient Long Polling + NLP Parser)"]
+    subgraph L2["2. Tầng Bảo Mật & Điều Phối (Security & Gateway)"]
+        SecFilter["Spring Security 6<br/>AuthFilter (JWT) + CORS Config"]:::security
     end
 
-    subgraph DataLayer ["Lưu Trữ Dữ Liệu"]
-        Database[("MS SQL Server 2012+<br/>financial_management")]
-        Storage["Thư mục Images (Hóa đơn)"]
+    subgraph L3["3. Tầng Điều Khiển API (REST Controllers)"]
+        ApiControllers["12 REST Controllers<br/>(/auth, /accounts, /transactions, /budgets, /reports...)"]:::controller
     end
 
-    subgraph ExternalServices ["Dịch Vụ Ngoại Vi (External Services)"]
-        BankWebhook["Cổng Ngân Hàng Webhook<br/>(SePay / Casso / VietQR)"]
-        GeminiAI["Google Gemini Flash API<br/>(OCR Hóa Đơn & NLP Voice)"]
-        GmailSMTP["Gmail SMTP Server<br/>(Gửi mail reset mật khẩu)"]
-        ExchangeRate["Tỷ giá Trực Tuyến<br/>(Exchangerate-api USD/VND)"]
-        CloudDrive["Google Drive / Storage<br/>(Sao lưu DB định kỳ tự động)"]
+    subgraph L4["4. Tầng Nghiệp Vụ & Tác Vụ Nền (Business Logic & Workers)"]
+        Services["Business Services & JPA Specifications"]:::service
+        Schedulers["Scheduled Tasks & Telegram Bot Engine<br/>(Java 21 HttpClient Long Polling)"]:::service
     end
 
-    VueClient <-->|RESTful API / JSON / Multipart| Security
-    TeleUser <-->|Telegram Bot API (Long Polling)| TelegramEngine
-    BankWebhook -->|Incoming Webhook (HMAC Signature)| Security
-    
-    Security --> Controllers
-    Controllers --> Services
-    TelegramEngine --> Services
-    Cronjobs --> Services
-    
-    Services <--> Database
-    Services <--> Storage
-    Services <-->|Google Gemini SDK / REST| GeminiAI
-    Services <-->|SMTP Port 587| GmailSMTP
-    Cronjobs <-->|HTTP REST| ExchangeRate
-    Cronjobs -.->|Auto Dump & Upload| CloudDrive
+    subgraph L5["5. Tầng Dữ Liệu & Lưu Trữ (Persistence & Storage)"]
+        Repositories["Spring Data JPA Repositories"]:::data
+        Database[("MS SQL Server Database<br/>financial_management")]:::data
+        FileStorage["Local Storage<br/>(images/ Hóa đơn)"]:::data
+    end
+
+    subgraph L6["6. Tầng Tích Hợp Ngoại Vi (External Integrations)"]
+        GeminiAI["Google Gemini Flash API<br/>(AI OCR Hóa Đơn & Voice)"]:::external
+        GmailSMTP["Gmail SMTP Server<br/>(Quên mật khẩu)"]:::external
+        ExchangeRate["Exchange Rate API<br/>(Tỷ giá USD/VND)"]:::external
+    end
+
+    VueClient -->|HTTP RESTful + JWT| SecFilter
+    BankGate -->|POST Webhook + HMAC| SecFilter
+    SecFilter --> ApiControllers
+    TeleApp <-->|Long Polling 24/7| Schedulers
+
+    ApiControllers --> Services
+    Schedulers --> Services
+
+    Services --> Repositories
+    Services --> FileStorage
+    Services --> GeminiAI
+    Services --> GmailSMTP
+    Schedulers --> ExchangeRate
+
+    Repositories <--> Database
 ```
+
+### 📋 Chi tiết vai trò từng tầng kiến trúc:
+
+| Tầng Kiến Trúc | Thành phần chính | Trách nhiệm & Vai trò |
+|---|---|---|
+| **1. Client & Inbound Layer** | Vue.js App, Telegram App, Webhook Providers | Điểm tương tác của người dùng và các bên thứ ba gửi dữ liệu vào hệ thống. |
+| **2. Security & Gateway** | Spring Security 6, `AuthFilter`, `WebConfig` (CORS) | Chặn lọc truy cập trái phép, giải mã JWT Token, kiểm tra quyền hạn, cấu hình CORS cho phép Vue App (`localhost:5173`) kết nối an toàn. |
+| **3. REST Controller Layer** | 12 Controllers (`TransactionController`, `AccountController`,...) | Tiếp nhận HTTP Request, validate dữ liệu đầu vào (Bean Validation), đóng gói phản hồi chuẩn `AbstractResponse<T>`. |
+| **4. Business Logic & Workers** | Services, JPA Specifications, Cronjobs, Telegram Engine | Xử lý logic nghiệp vụ tài chính, đảm bảo giao dịch nguyên tử `@Transactional`, chạy ngầm cronjob định kỳ và điều phối bot Telegram. |
+| **5. Persistence & Storage** | Spring Data JPA Repositories, MS SQL Server, Disk Storage | Truy vấn dữ liệu hiệu năng cao, đảm bảo toàn vẹn dữ liệu sao kê, lưu trữ hình ảnh hóa đơn tại thư mục `images/`. |
+| **6. External Integrations** | Gemini AI, Gmail SMTP, Exchange Rate API | Mở rộng tính năng tự động: đọc hóa đơn qua AI, gửi mail xác thực và cập nhật tỷ giá thị trường. |
 
 ---
 

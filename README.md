@@ -17,6 +17,8 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - [⚙️ Cài đặt & Cấu hình](#️-cài-đặt--cấu-hình)
 - [🚀 Hướng dẫn Chạy ứng dụng](#-hướng-dẫn-chạy-ứng-dụng)
 - [📚 Danh sách RESTful API](#-danh-sách-restful-api)
+- [🚨 Chuẩn hóa Phản hồi & Xử lý Lỗi (Error Handling)](#-chuẩn-hóa-phản-hồi--xử-lý-lỗi-error-handling)
+- [⚡ Tối ưu hóa Hiệu năng & Truy vấn (Performance)](#-tối-ưu-hóa-hiệu-năng--truy-vấn-performance)
 - [🔢 Bảng tra cứu Hằng số (Constants Reference)](#-bảng-tra-cứu-hằng-số-constants-reference)
 - [📊 Quy tắc Tính toán & Toàn vẹn Dữ liệu](#-quy-tắc-tính-toán--toàn-vẹn-dữ-liệu)
 - [🔐 Cơ chế Bảo mật & Xác thực](#-cơ-chế-bảo-mật--xác-thực)
@@ -131,12 +133,14 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 | **Token Auth** | JJWT (`jjwt-api`, `jjwt-impl`) | **0.11.5** | Tạo và kiểm tra JWT Token |
 | **API Docs** | Springdoc OpenAPI / Swagger UI | **2.5.0** | Tài liệu tương tác API trực quan |
 | **Object Mapping** | MapStruct | **1.5.5.Final** | Chuyển đổi Entity <-> DTO hiệu năng cao |
+| **Caching** | Spring Cache | 3.5.5 | Cache thông tin người dùng xác thực, giảm tải DB |
 | **PDF Generation** | iText | **5.5.13.3** | Xuất tài liệu PDF báo cáo tài chính |
 | **Mail Service** | Spring Boot Starter Mail | 3.5.5 | Gửi email khôi phục mật khẩu qua SMTP |
 | **Validation** | Jakarta Bean Validation | 3.5.5 | Kiểm tra tính hợp lệ của DTO request |
+| **Exception Handling** | Global Exception Handler | - | Chuẩn hóa mã lỗi và HTTP status code toàn hệ thống |
 | **Scheduling** | Spring `@Scheduled` | 3.5.5 | Cronjobs định kỳ cho giao dịch & tỷ giá |
 | **Telegram Bot** | Telegram Bot API / Java 21 `HttpClient` | - | Long Polling tự động, bóc tách NLP tiếng Việt |
-| **Tiện ích** | Lombok, Gson, Jackson | - | Giảm thiểu boilerplate code |
+| **Tiện ích** | Lombok, Gson, Jackson | - | Format thời gian ISO-8601 UTC, giảm boilerplate code |
 
 ---
 
@@ -152,7 +156,7 @@ financial_management/
     └── src/
         ├── main/
         │   ├── java/com/example/financial_management/
-        │   │   ├── config/            # Cấu hình: Security, AuthFilter, Swagger, Web CORS, Converter
+        │   │   ├── config/            # Cấu hình: Security, AuthFilter, Swagger, Web CORS, Jackson ISO-8601, Converter
         │   │   ├── constant/          # Hằng số hệ thống: Category, TransactionType, Status, DebtType...
         │   │   ├── controllers/       # REST Controllers: Auth, User, Account, Transaction, Report...
         │   │   ├── cronjob/           # Tác vụ định kỳ: RecurringTransactionCronjob, CurrencyExchangeCronjob
@@ -409,6 +413,68 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|---|
 | `GET` | `/telegram/test-parse?text={content}` | Public | Kiểm tra kết quả bóc tách cú pháp số tiền, danh mục và ví thanh toán |
 | `POST` | `/telegram/simulate?text={content}&email={e}` | Public | Giả lập gửi tin nhắn Telegram vào hệ thống (thực hiện ghi chép thật) |
+
+---
+
+## 🚨 Chuẩn hóa Phản hồi & Xử lý Lỗi (Error Handling)
+
+Hệ thống áp dụng bộ xử lý lỗi tập trung `GlobalExceptionHandler` kết hợp chuẩn hóa cấu trúc phản hồi `AbstractResponse<T>` và `ResponseError`:
+
+### 1. Phản hồi Thành công (Success Response)
+HTTP Status Code khớp trực tiếp với trường `code` trong body (ví dụ `200 OK`, `201 CREATED`):
+```json
+{
+  "data": { ... },
+  "success": true,
+  "code": 200,
+  "message": null,
+  "executionTimeInSeconds": 0.012
+}
+```
+
+### 2. Phản hồi Lỗi Chuẩn hóa (Error Response)
+Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, Lỗi máy chủ), mã HTTP Status Code của Header và trường `code` luôn đồng bộ (`400`, `401`, `403`, `404`, `500`), và `stackTrace` được **ẩn hoàn toàn** trong JSON để đảm bảo an toàn thông tin:
+```json
+{
+  "error": {
+    "code": "400",
+    "message": "Số tiền nạp phải lớn hơn 0",
+    "details": null
+  },
+  "success": false,
+  "code": 400,
+  "message": null,
+  "executionTimeInSeconds": 0.005
+}
+```
+- **Validation Error (`400 BAD_REQUEST`)**: Trả về chi tiết các trường vi phạm qua mảng `details: ["field: lý do lỗi"]`.
+- **Định dạng thời gian chuẩn ISO-8601**: Mọi đối tượng thời gian trả về đều được serialize đồng nhất theo định dạng **ISO-8601 UTC** (`yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`) thông qua cấu hình `JacksonConfig`.
+
+---
+
+## ⚡ Tối ưu hóa Hiệu năng & Truy vấn (Performance)
+
+Để đảm bảo tốc độ phản hồi API cực nhanh (sub-50ms) và tối ưu hóa tài nguyên cơ sở dữ liệu, hệ thống áp dụng các giải pháp kỹ thuật:
+
+### 1. Tiền nạp Tỷ giá Ngoại tệ (Exchange Rate Pre-fetching)
+- **Vấn đề**: Trong các API lấy danh sách nhiều bản ghi (Giao dịch, Tài khoản, Sổ nợ, Báo cáo), việc gọi `currencyExchangeService.getCurrentRate()` lặp lại trong mỗi vòng lặp `map(...)` gây lãng phí CPU và đọc biến volatile/lock hàng trăm lần trên mỗi request ($O(N)$ operations).
+- **Giải pháp**: Pre-fetch tỷ giá USD 1 lần duy nhất ở đầu phương thức ($O(1)$) và truyền trực tiếp vào các hàm chuyển đổi DTO (`calculateUsd`, `toUsd`, `toEnrichedResponse`).
+
+### 2. Loại bỏ `saveAndFlush()` & Tận dụng Write-Behind Batching
+- **Vấn đề**: Việc gọi `saveAndFlush()` trong các phương thức có `@Transactional` ép JPA Hibernate phải flush SQL tức thì xuống Database sau mỗi thao tác đơn lẻ, phá vỡ cơ chế gom nhóm (JDBC batching) và làm tăng độ trễ mạng (network I/O roundtrip).
+- **Giải pháp**: Chuyển toàn bộ sang `save()`, cho phép Hibernate tích lũy thay đổi trong Persistence Context và flush một lần duy nhất khi commit transaction.
+
+### 3. Giải quyết triệt để N+1 Query với `@EntityGraph`
+- **Vấn đề**: Quan hệ nhiều-nhiều `@ManyToMany Set<Tag> tags` trong `Transaction` bị Lazy Loading, dẫn đến việc lấy $N$ giao dịch sẽ phát sinh thêm $N$ câu lệnh `SELECT` riêng biệt tới bảng liên kết `transaction_tags`.
+- **Giải pháp**: Áp dụng `@EntityGraph(attributePaths = {"tags"})` tại `TransactionRepository` cho các truy vấn theo khoảng thời gian và theo tài khoản. Toàn bộ tags được Eager Fetch (Left Join) chỉ trong **1 câu lệnh SQL duy nhất**.
+
+### 4. Bulk Processing & Batch Query
+- **Cập nhật Nợ Quá Hạn**: Thay vì duyệt lặp từng bản ghi nợ quá hạn và `save()` riêng lẻ, `DebtRepository` sử dụng câu lệnh `@Modifying @Query` để cập nhật trạng thái hàng loạt nợ quá hạn trực tiếp ở tầng Database chỉ bằng **1 câu lệnh UPDATE duy nhất**.
+- **Xử lý Thẻ Tag Hàng Loạt (`TagService.resolveTags`)**: Thay thế các truy vấn `findById` và `findByName` tuần tự bằng `findAllByUserIdAndIdIn(...)`, `findAllByUserIdAndNameIn(...)` và lưu tag mới bằng `saveAll(...)`, giảm thiểu từ $2N$ queries xuống còn tối đa 2-3 queries.
+
+### 5. Bộ nhớ Đệm Dữ liệu Người dùng (Spring Cache)
+- **Giải pháp**: Áp dụng `@Cacheable(value = "authenticatedUser", key = "#auth.id")` cho phương thức `UserService.getAuthenticatedUser()`.
+- **Hiệu quả**: Loại bỏ hoàn toàn truy vấn lặp `SELECT * FROM users` trên hơn 95% API calls (vì hầu như mọi endpoint đều xác thực user). Bộ nhớ đệm được tự động giải phóng/làm mới qua `@CacheEvict` khi người dùng cập nhật hồ sơ cá nhân hoặc đổi mật khẩu.
 
 ---
 

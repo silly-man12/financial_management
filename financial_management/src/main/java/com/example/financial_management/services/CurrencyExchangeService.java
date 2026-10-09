@@ -136,10 +136,13 @@ public class CurrencyExchangeService {
      * Quy đổi số tiền VND sang USD (làm tròn 2 chữ số thập phân)
      */
     public BigDecimal toUsd(BigDecimal amountVnd) {
+        return toUsd(amountVnd, getCurrentRate());
+    }
+
+    public BigDecimal toUsd(BigDecimal amountVnd, BigDecimal rate) {
         if (amountVnd == null) {
             return BigDecimal.ZERO;
         }
-        BigDecimal rate = getCurrentRate();
         if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
@@ -162,13 +165,17 @@ public class CurrencyExchangeService {
      * Nếu tiền gốc là USD -> giữ nguyên
      */
     public BigDecimal calculateUsd(BigDecimal amount, int currency) {
+        return calculateUsd(amount, currency, getCurrentRate());
+    }
+
+    public BigDecimal calculateUsd(BigDecimal amount, int currency, BigDecimal rate) {
         if (amount == null) {
             return BigDecimal.ZERO;
         }
         if (currency == Currency.USD) {
             return amount.setScale(2, RoundingMode.HALF_UP);
         }
-        return toUsd(amount);
+        return toUsd(amount, rate);
     }
 
     /**

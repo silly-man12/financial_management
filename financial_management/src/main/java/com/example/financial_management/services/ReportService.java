@@ -70,11 +70,15 @@ public class ReportService {
         private final PdfReportService pdfReportService;
 
         private TransactionResponse toEnrichedTransaction(Transaction transaction) {
+                return toEnrichedTransaction(transaction, currencyExchangeService.getCurrentRate());
+        }
+
+        private TransactionResponse toEnrichedTransaction(Transaction transaction, BigDecimal rate) {
                 TransactionResponse response = transactionMapper.toResponse(transaction);
                 if (response != null) {
-                        response.setExchangeRate(currencyExchangeService.getCurrentRate());
+                        response.setExchangeRate(rate);
                         response.setAmountUsd(currencyExchangeService.calculateUsd(response.getAmount(),
-                                        response.getCurrency()));
+                                        response.getCurrency(), rate));
                 }
                 return response;
         }
@@ -87,8 +91,9 @@ public class ReportService {
                 List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(
                                 auth.getUUID(), startDate, endDate);
 
+                BigDecimal currentRate = currencyExchangeService.getCurrentRate();
                 List<TransactionResponse> response = List.copyOf(transactions.stream()
-                                .map(this::toEnrichedTransaction)
+                                .map(tx -> toEnrichedTransaction(tx, currentRate))
                                 .toList());
 
                 return response;
@@ -356,9 +361,10 @@ public class ReportService {
                 BigDecimal startBalance = endBalance.subtract(remaining);
 
                 // Lấy lịch sử giao dịch
+                BigDecimal currentRate = currencyExchangeService.getCurrentRate();
                 List<TransactionResponse> balanceHistory = transactionRepository.findAllByAccountIdAndUserId(
                                 accountId, user.getId()).stream()
-                                .map(this::toEnrichedTransaction)
+                                .map(tx -> toEnrichedTransaction(tx, currentRate))
                                 .toList();
 
                 // Tạo response
