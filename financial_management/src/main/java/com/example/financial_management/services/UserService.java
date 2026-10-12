@@ -19,9 +19,7 @@ import com.example.financial_management.util.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
@@ -50,15 +48,16 @@ public class UserService {
     private final EmailService emailService;
 
     public UserResponse signUp(UserSignUpRequest request) {
-        validateSignUp(request);
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
 
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getPassword());
+        validatePasswordAndConfirm(request.getPassword(), request.getConfirmPassword());
 
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getPassword());
         user.setStatus(Status.ACTIVE);
 
         if (request.getEmail().equals(emailAdmin)) {
@@ -80,9 +79,7 @@ public class UserService {
 
         List<Account> accounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
 
-        Auth auth = createAuth(user, accounts);
-
-        return jwtTokenUtil.generateToken(auth);
+        return jwtTokenUtil.generateToken(user, accounts);
     }
 
     @Cacheable(value = "authenticatedUser", key = "#auth.id")
@@ -106,9 +103,11 @@ public class UserService {
         User user = userRepository.findById(auth.getUUID())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        user.setName(request.getName());
-        User saved = userRepository.save(user);
-        return userMapper.toResponse(saved);
+        if (applyProfileUpdates(user, request)) {
+            user = userRepository.save(user);
+        }
+
+        return userMapper.toResponse(user);
     }
 
     @CacheEvict(value = "authenticatedUser", key = "#auth.id")
@@ -121,10 +120,7 @@ public class UserService {
 
         validatePasswordAndConfirm(request.getNewPassword(), request.getConfirmPassword());
 
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getNewPassword());
-
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getNewPassword());
 
         User saved = userRepository.save(user);
 
@@ -216,9 +212,7 @@ public class UserService {
         validateUser(user);
 
         // Cập nhật mật khẩu mới
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getNewPassword());
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getNewPassword());
 
         User saved = userRepository.save(user);
         return userMapper.toResponse(saved);
@@ -252,22 +246,10 @@ public class UserService {
         }
     }
 
-    private void validateSignUp(UserSignUpRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
-        }
-
-        validatePasswordAndConfirm(request.getPassword(), request.getConfirmPassword());
-    }
-
-    private Map<String, String> generateHashAndSalt(String password) {
+    private void setUserPassword(User user, String rawPassword) {
         String salt = BCrypt.gensalt();
-        String hash = BCrypt.hashpw(password, salt);
-
-        Map<String, String> result = new HashMap<>();
-        result.put("salt", salt);
-        result.put("hash", hash);
-        return result;
+        user.setPasswordSalt(salt);
+        user.setPasswordHash(BCrypt.hashpw(rawPassword, salt));
     }
 
     private void validatePasswordAndConfirm(String password, String confirmPassword) {
@@ -285,29 +267,57 @@ public class UserService {
         }
     }
 
-    private Auth createAuth(User user, List<Account> accounts) {
-        Auth auth = new Auth();
-        auth.setId(user.getId().toString());
-        auth.setRole(user.getRole());
-        auth.setStatus(user.getStatus());
-        auth.setEmail(user.getEmail());
-        auth.setName(user.getName());
+    public Auth createAuth(User user, List<Account> accounts) {
+        return jwtTokenUtil.createAuth(user, accounts);
+    }
 
-        // Chuyển List<Account> sang List<AuthAccount>
-        if (accounts != null && !accounts.isEmpty()) {
-            List<AuthAccount> authAccounts = accounts.stream().map(acc -> {
-                AuthAccount authAcc = new AuthAccount();
-                authAcc.setId(acc.getId());
-                authAcc.setName(acc.getName());
-                authAcc.setStatus(acc.getStatus());
-                return authAcc;
-            }).toList();
-            auth.setAccounts(authAccounts);
-        } else {
-            auth.setAccounts(List.of());
+    private boolean applyProfileUpdates(User user, ChangeNameRequest request) {
+        boolean updated = false;
+
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            String trimmedName = request.getName().trim();
+            if (!trimmedName.equals(user.getName())) {
+                user.setName(trimmedName);
+                updated = true;
+            }
         }
 
-        return auth;
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            String trimmedEmail = request.getEmail().trim();
+            if (!trimmedEmail.equalsIgnoreCase(user.getEmail())) {
+                userRepository.findByEmail(trimmedEmail).ifPresent(existingUser -> {
+                    if (!existingUser.getId().equals(user.getId())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+                    }
+                });
+                user.setEmail(trimmedEmail);
+                updated = true;
+            }
+        }
+
+        return updated;
+    }
+
+    public boolean existsByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return false;
+        }
+        return userRepository.existsByEmail(email.trim().toLowerCase())
+                || userRepository.findByEmail(email.trim()).isPresent();
+    }
+
+    public String authenticate(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không hợp lệ");
+        }
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .or(() -> userRepository.findByEmail(email.trim()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        validateUser(user);
+
+        List<Account> accounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
+        return jwtTokenUtil.generateToken(user, accounts);
     }
 
 }

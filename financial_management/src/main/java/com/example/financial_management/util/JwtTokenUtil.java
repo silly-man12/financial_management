@@ -6,6 +6,8 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.example.financial_management.entity.Account;
+import com.example.financial_management.entity.User;
 import com.example.financial_management.model.auth.Auth;
 import com.example.financial_management.model.auth.AuthAccount;
 
@@ -50,6 +52,37 @@ public class JwtTokenUtil {
                 .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
                 .signWith(secretKey, SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    // Chuyển User và Accounts thành đối tượng Auth
+    public Auth createAuth(User user, List<Account> accounts) {
+        Auth auth = new Auth();
+        auth.setId(user.getId().toString());
+        auth.setRole(user.getRole());
+        auth.setStatus(user.getStatus());
+        auth.setEmail(user.getEmail());
+        auth.setName(user.getName());
+
+        if (accounts != null && !accounts.isEmpty()) {
+            List<AuthAccount> authAccounts = accounts.stream().map(acc -> {
+                AuthAccount authAcc = new AuthAccount();
+                authAcc.setId(acc.getId());
+                authAcc.setName(acc.getName());
+                authAcc.setStatus(acc.getStatus());
+                return authAcc;
+            }).collect(Collectors.toList());
+            auth.setAccounts(authAccounts);
+        } else {
+            auth.setAccounts(List.of());
+        }
+
+        return auth;
+    }
+
+    // Tạo JWT Token trực tiếp từ User và danh sách Account
+    public String generateToken(User user, List<Account> accounts) {
+        Auth auth = createAuth(user, accounts);
+        return generateToken(auth);
     }
 
     // Tạo Reset Password Token (hạn 15 phút)
