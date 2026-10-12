@@ -46,7 +46,8 @@ public class OAuthService {
 
     private static final Set<String> ALLOWED_BASES = Set.of(
             "http://localhost:8080",
-            "http://localhost:5173");
+            "http://localhost:5173",
+            "http://127.0.0.1:5173");
 
     private final UserService userService;
 
