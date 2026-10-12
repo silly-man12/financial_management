@@ -29,6 +29,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ### 1. 👤 Quản lý Người dùng & Xác thực (Auth & Users)
 - **Đăng ký / Đăng nhập**: Xác thực không trạng thái (stateless) qua JWT Token, phân quyền người dùng `USER (2)` và `ADMIN (1)`.
+- **Đăng nhập Google OAuth2 (`/auth/google`, `/auth/google-callback`)**: Đăng nhập nhanh bằng tài khoản Google (OAuth 2.0 Authorization Code flow). Tự động xác thực tài khoản qua Google OpenID Connect (OIDC), tra cứu email người dùng trong hệ thống, sinh JWT Token và chuyển hướng an toàn về ứng dụng Frontend (Vue/React).
 - **Cập nhật Hồ sơ Cá nhân (`/users/updateProfile`)**: Cho phép cập nhật linh hoạt Họ tên và/hoặc Địa chỉ Email (tự động kiểm tra trùng lặp email với các tài khoản khác, chỉ lưu khi có thay đổi).
 - **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt kết hợp Custom Salt độc lập, hỗ trợ đổi mật khẩu (`/users/changePassword`).
 - **Quên / Đặt lại mật khẩu**: Gửi email chứa liên kết token tạm thời (hạn 15 phút) qua Gmail SMTP, hỗ trợ xác thực mã token và đặt mật khẩu mới.
@@ -239,6 +240,13 @@ telegram.bot.enabled=true
 telegram.bot.token=your_telegram_bot_token_from_botfather
 telegram.bot.username=your_bot_username
 telegram.bot.default-user-email=admin@example.com
+
+# Cấu hình Google OAuth2 (Đăng nhập bằng Google)
+google.oauth.client-id=your_google_client_id.apps.googleusercontent.com
+google.oauth.client-secret=your_google_client_secret
+google.oauth.redirect-uri=http://localhost:8080/auth/google-callback
+google.oauth.path=/sign-in/google
+base.url=http://localhost:8080
 ```
 
 ---
@@ -290,6 +298,8 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|---|
 | `POST` | `/auth/signup` | Public | Đăng ký tài khoản người dùng mới |
 | `POST` | `/auth/login` | Public | Đăng nhập và nhận chuỗi JWT Token |
+| `GET` | `/auth/google?base={b}&returnUrl={r}` | Public | **Chuyển hướng trực tiếp** sang trang đăng nhập Google OAuth2 |
+| `GET` | `/auth/google-callback?code={c}&state={s}` | Public | Google callback URL - xử lý đăng nhập và chuyển hướng về Frontend kèm JWT |
 | `POST` | `/auth/forgot-password` | Public | Yêu cầu gửi link đặt lại mật khẩu qua email |
 | `GET` | `/auth/verify-reset-token?token={t}` | Public | Kiểm tra tính hợp lệ của mã đặt lại mật khẩu |
 | `POST` | `/auth/reset-password` | Public | Xác nhận mật khẩu mới cùng mã xác thực |
@@ -616,3 +626,10 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
 4. **Bảo mật Tải lên File (File Upload)**:
    - Giới hạn dung lượng tối đa 20MB cho mỗi tệp tải lên.
    - Tệp được lưu trữ độc lập tại thư mục `images/` ngoài thư mục mã nguồn và phục vụ qua endpoint tĩnh được bảo vệ.
+
+5. **Xác thực Đăng nhập Google (Google OAuth2 / OIDC)**:
+   - Hệ thống tích hợp chuẩn OAuth 2.0 Authorization Code Flow kết hợp OpenID Connect (`openid email profile`).
+   - `OAuthService` sử dụng Java 21 `HttpClient` giao tiếp trực tiếp với máy chủ Google Identity Platform (`https://oauth2.googleapis.com/token`) để đổi `code` lấy `id_token`.
+   - Xác thực email người dùng từ `id_token` (Base64 decode payload JSON), kiểm tra người dùng trong cơ sở dữ liệu (`UserService.existsByEmail`), và sinh JWT Token qua `JwtTokenUtil`.
+   - Bảo mật chuyển hướng thông qua chuỗi `state` mã hóa Base64 chứa `base` và `returnUrl`, đảm bảo tương thích đa môi trường (Localhost 8080, Vue Client 5173, Production).
+

@@ -12,6 +12,8 @@ import com.example.financial_management.entity.User;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
+    boolean existsByEmail(String email);
+
     Optional<User> findByIdAndStatus(UUID id, int status);
 
     Optional<User> findByEmailAndStatus(String email, int status);

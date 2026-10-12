@@ -79,9 +79,7 @@ public class UserService {
 
         List<Account> accounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
 
-        Auth auth = createAuth(user, accounts);
-
-        return jwtTokenUtil.generateToken(auth);
+        return jwtTokenUtil.generateToken(user, accounts);
     }
 
     @Cacheable(value = "authenticatedUser", key = "#auth.id")
@@ -269,29 +267,8 @@ public class UserService {
         }
     }
 
-    private Auth createAuth(User user, List<Account> accounts) {
-        Auth auth = new Auth();
-        auth.setId(user.getId().toString());
-        auth.setRole(user.getRole());
-        auth.setStatus(user.getStatus());
-        auth.setEmail(user.getEmail());
-        auth.setName(user.getName());
-
-        // Chuyển List<Account> sang List<AuthAccount>
-        if (accounts != null && !accounts.isEmpty()) {
-            List<AuthAccount> authAccounts = accounts.stream().map(acc -> {
-                AuthAccount authAcc = new AuthAccount();
-                authAcc.setId(acc.getId());
-                authAcc.setName(acc.getName());
-                authAcc.setStatus(acc.getStatus());
-                return authAcc;
-            }).toList();
-            auth.setAccounts(authAccounts);
-        } else {
-            auth.setAccounts(List.of());
-        }
-
-        return auth;
+    public Auth createAuth(User user, List<Account> accounts) {
+        return jwtTokenUtil.createAuth(user, accounts);
     }
 
     private boolean applyProfileUpdates(User user, ChangeNameRequest request) {
@@ -319,6 +296,28 @@ public class UserService {
         }
 
         return updated;
+    }
+
+    public boolean existsByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return false;
+        }
+        return userRepository.existsByEmail(email.trim().toLowerCase())
+                || userRepository.findByEmail(email.trim()).isPresent();
+    }
+
+    public String authenticate(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không hợp lệ");
+        }
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .or(() -> userRepository.findByEmail(email.trim()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        validateUser(user);
+
+        List<Account> accounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
+        return jwtTokenUtil.generateToken(user, accounts);
     }
 
 }

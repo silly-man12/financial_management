@@ -41,6 +41,8 @@ public class SecurityConfig {
             "/auth/forgot-password",
             "/auth/verify-reset-token",
             "/auth/reset-password",
+            "/auth/google",
+            "/auth/google-callback",
             "/images/**",
             "/currency-exchange/latest",
             "/currency-exchange/history",
