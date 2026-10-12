@@ -19,9 +19,7 @@ import com.example.financial_management.util.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
@@ -50,15 +48,16 @@ public class UserService {
     private final EmailService emailService;
 
     public UserResponse signUp(UserSignUpRequest request) {
-        validateSignUp(request);
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
 
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getPassword());
+        validatePasswordAndConfirm(request.getPassword(), request.getConfirmPassword());
 
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getPassword());
         user.setStatus(Status.ACTIVE);
 
         if (request.getEmail().equals(emailAdmin)) {
@@ -106,9 +105,11 @@ public class UserService {
         User user = userRepository.findById(auth.getUUID())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        user.setName(request.getName());
-        User saved = userRepository.save(user);
-        return userMapper.toResponse(saved);
+        if (applyProfileUpdates(user, request)) {
+            user = userRepository.save(user);
+        }
+
+        return userMapper.toResponse(user);
     }
 
     @CacheEvict(value = "authenticatedUser", key = "#auth.id")
@@ -121,10 +122,7 @@ public class UserService {
 
         validatePasswordAndConfirm(request.getNewPassword(), request.getConfirmPassword());
 
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getNewPassword());
-
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getNewPassword());
 
         User saved = userRepository.save(user);
 
@@ -216,9 +214,7 @@ public class UserService {
         validateUser(user);
 
         // Cập nhật mật khẩu mới
-        Map<String, String> hashAndSalt = generateHashAndSalt(request.getNewPassword());
-        user.setPasswordSalt(hashAndSalt.get("salt"));
-        user.setPasswordHash(hashAndSalt.get("hash"));
+        setUserPassword(user, request.getNewPassword());
 
         User saved = userRepository.save(user);
         return userMapper.toResponse(saved);
@@ -252,22 +248,10 @@ public class UserService {
         }
     }
 
-    private void validateSignUp(UserSignUpRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
-        }
-
-        validatePasswordAndConfirm(request.getPassword(), request.getConfirmPassword());
-    }
-
-    private Map<String, String> generateHashAndSalt(String password) {
+    private void setUserPassword(User user, String rawPassword) {
         String salt = BCrypt.gensalt();
-        String hash = BCrypt.hashpw(password, salt);
-
-        Map<String, String> result = new HashMap<>();
-        result.put("salt", salt);
-        result.put("hash", hash);
-        return result;
+        user.setPasswordSalt(salt);
+        user.setPasswordHash(BCrypt.hashpw(rawPassword, salt));
     }
 
     private void validatePasswordAndConfirm(String password, String confirmPassword) {
@@ -308,6 +292,33 @@ public class UserService {
         }
 
         return auth;
+    }
+
+    private boolean applyProfileUpdates(User user, ChangeNameRequest request) {
+        boolean updated = false;
+
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            String trimmedName = request.getName().trim();
+            if (!trimmedName.equals(user.getName())) {
+                user.setName(trimmedName);
+                updated = true;
+            }
+        }
+
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            String trimmedEmail = request.getEmail().trim();
+            if (!trimmedEmail.equalsIgnoreCase(user.getEmail())) {
+                userRepository.findByEmail(trimmedEmail).ifPresent(existingUser -> {
+                    if (!existingUser.getId().equals(user.getId())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+                    }
+                });
+                user.setEmail(trimmedEmail);
+                updated = true;
+            }
+        }
+
+        return updated;
     }
 
 }

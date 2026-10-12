@@ -29,7 +29,8 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ### 1. 👤 Quản lý Người dùng & Xác thực (Auth & Users)
 - **Đăng ký / Đăng nhập**: Xác thực không trạng thái (stateless) qua JWT Token, phân quyền người dùng `USER (2)` và `ADMIN (1)`.
-- **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt kết hợp Custom Salt độc lập.
+- **Cập nhật Hồ sơ Cá nhân (`/users/updateProfile`)**: Cho phép cập nhật linh hoạt Họ tên và/hoặc Địa chỉ Email (tự động kiểm tra trùng lặp email với các tài khoản khác, chỉ lưu khi có thay đổi).
+- **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt kết hợp Custom Salt độc lập, hỗ trợ đổi mật khẩu (`/users/changePassword`).
 - **Quên / Đặt lại mật khẩu**: Gửi email chứa liên kết token tạm thời (hạn 15 phút) qua Gmail SMTP, hỗ trợ xác thực mã token và đặt mật khẩu mới.
 - **Quản trị người dùng (Admin)**: Danh sách toàn bộ tài khoản người dùng, chuyển đổi trạng thái Hoạt động / Khóa (`ACTIVE = 1` / `INACTIVE = 2`).
 
@@ -297,7 +298,7 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
 |---|---|---|---|
 | `GET` | `/users/me` | User / Admin | Xem thông tin tài khoản đang đăng nhập |
-| `POST` | `/users/updateProfile` | User / Admin | Cập nhật họ tên, thông tin cá nhân |
+| `POST` | `/users/updateProfile` | User / Admin | Cập nhật họ tên và/hoặc địa chỉ email cá nhân |
 | `POST` | `/users/changePassword` | User / Admin | Đổi mật khẩu tài khoản |
 | `GET` | `/users/listUser` | Admin | Lấy danh sách toàn bộ người dùng hệ thống |
 | `POST` | `/users/changeStatus` | Admin | Thay đổi trạng thái tài khoản (`1: ACTIVE`, `2: INACTIVE`) |
