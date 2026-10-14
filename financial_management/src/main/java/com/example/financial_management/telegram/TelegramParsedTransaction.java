@@ -14,6 +14,7 @@ public class TelegramParsedTransaction {
     private int category;
     private String categoryName;
     private String accountKeyword;
+    private String rawAccountKeyword;
     private String description;
     private String errorMessage;
     private String rawInput;

@@ -1,5 +1,6 @@
 package com.example.financial_management.telegram;
 
+import com.example.financial_management.constant.AccountType;
 import com.example.financial_management.constant.Status;
 import com.example.financial_management.constant.TransactionType;
 import com.example.financial_management.entity.Account;
@@ -13,7 +14,6 @@ import com.example.financial_management.repository.UserRepository;
 import com.example.financial_management.services.TransactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +36,13 @@ public class TelegramCommandHandler {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final TransactionService transactionService;
+    private final TelegramService telegramService;
 
     private static final Locale VI_LOCALE = Locale.of("vi", "VN");
 
     private String formatMoney(BigDecimal amount) {
-        if (amount == null) return "0 ₫";
+        if (amount == null)
+            return "0 ₫";
         NumberFormat nf = NumberFormat.getNumberInstance(VI_LOCALE);
         return nf.format(amount) + " ₫";
     }
@@ -56,55 +58,42 @@ public class TelegramCommandHandler {
 
         String trimmed = messageText.trim();
 
-        // 1. Kiểm tra lệnh /start
-        if (trimmed.equalsIgnoreCase("/start")) {
-            handleStartCommand(chatId);
+        // 1. Kiểm tra lệnh /start (hỗ trợ cả /start và deep link /start LINK_xxxxxx)
+        if (trimmed.toLowerCase().startsWith("/start")) {
+            handleStartCommand(chatId, trimmed);
             return;
         }
 
-        // 2. Kiểm tra lệnh /link <email> <password>
+        // 2. Kiểm tra lệnh /link
         if (trimmed.toLowerCase().startsWith("/link")) {
             handleLinkCommand(chatId, trimmed);
             return;
         }
 
-        // 3. Tìm user theo Chat ID
-        Optional<User> userOpt = userRepository.findByTelegramChatIdAndStatus(chatId, Status.ACTIVE);
-
-        // Nếu chưa liên kết, thử xem có cấu hình email mặc định không
-        if (userOpt.isEmpty() && config.getDefaultUserEmail() != null && !config.getDefaultUserEmail().trim().isEmpty()) {
-            Optional<User> defaultUserOpt = userRepository.findByEmailAndStatus(config.getDefaultUserEmail().trim(), Status.ACTIVE);
-            if (defaultUserOpt.isPresent()) {
-                User defaultUser = defaultUserOpt.get();
-                // Tự động gán nếu user mặc định chưa liên kết chat nào
-                if (defaultUser.getTelegramChatId() == null) {
-                    defaultUser.setTelegramChatId(chatId);
-                    userRepository.save(defaultUser);
-                    userOpt = Optional.of(defaultUser);
-                    botClient.sendMessage(chatId, "🔗 <i>Đã tự động liên kết Bot với tài khoản chủ sở hữu: <b>" + defaultUser.getEmail() + "</b></i>");
-                }
-            }
-        }
-
-        if (userOpt.isEmpty()) {
-            botClient.sendMessage(chatId,
-                    "⚠️ <b>Bạn chưa liên kết tài khoản!</b>\n\n" +
-                    "Để sử dụng bot ghi chép tài chính, vui lòng nhập lệnh:\n" +
-                    "<code>/link &lt;email&gt; &lt;mật_khẩu&gt;</code>\n\n" +
-                    "<i>Ví dụ: <code>/link nghyqn1201@gmail.com 123456</code></i>");
-            return;
-        }
-
-        User user = userOpt.get();
-
-        // 4. Xử lý các lệnh tra cứu
+        // 3. Kiểm tra lệnh /help hoặc /huongdan (hướng dẫn cú pháp chi tiết)
         String lowerCmd = trimmed.toLowerCase();
-
         if (lowerCmd.equals("/help") || lowerCmd.equals("/huongdan")) {
             handleHelpCommand(chatId);
             return;
         }
 
+        // 4. Whitelist Guard: Kiểm tra người dùng đã liên kết với Chat ID này chưa
+        Optional<User> userOpt = userRepository.findByTelegramChatIdAndStatus(chatId, Status.ACTIVE);
+
+        if (userOpt.isEmpty()) {
+            botClient.sendMessage(chatId,
+                    "⛔ <b>Bạn chưa liên kết tài khoản!</b>\n\n" +
+                            "Vì lý do an toàn bảo mật (Whitelist Guard), bot chỉ phục vụ tài khoản đã được xác thực.\n\n"
+                            +
+                            "👉 Vui lòng đăng nhập vào ứng dụng Web, mở phần <b>Cài đặt Telegram</b> để tạo mã liên kết OTP (hoặc bấm vào liên kết trực tiếp).\n\n"
+                            +
+                            "💡 <i>Gõ <code>/help</code> để xem trước cẩm nang hướng dẫn sử dụng bot.</i>");
+            return;
+        }
+
+        User user = userOpt.get();
+
+        // 5. Xử lý các lệnh tra cứu (chỉ cho phép user đã xác thực)
         if (lowerCmd.equals("/unlink")) {
             handleUnlinkCommand(chatId, user);
             return;
@@ -139,84 +128,175 @@ public class TelegramCommandHandler {
         handleCreateTransaction(chatId, user, trimmed);
     }
 
-    private void handleStartCommand(long chatId) {
-        String msg =
-                "👋 <b>Chào mừng bạn đến với Bot Quản Lý Tài Chính Cá Nhân!</b>\n\n" +
-                "⚡ <b>Ghi chép chi tiêu siêu tốc tùy ý:</b>\n" +
-                "• <code>32500 banh mi</code> (Số tiền tùy ý, không cần đơn vị)\n" +
-                "• <code>127.500 sieu thi</code> (Có dấu chấm phân cách)\n" +
-                "• <code>45.5k cafe</code> hoặc <code>50k cf</code>\n" +
-                "• <code>35k com trua vcb</code> (Tự lưu ví VCB)\n" +
-                "• <code>+15tr luong</code> (Ghi nhận thu nhập)\n" +
-                "• <code>1.25tr tien nha</code>\n\n" +
-                "📊 <b>Các lệnh tra cứu nhanh:</b>\n" +
-                "• /sodu - Xem số dư các ví & tổng tài sản\n" +
-                "• /homnay - Xem tổng chi hôm nay\n" +
-                "• /thangnay - Báo cáo thu chi tháng này\n" +
-                "• /vi - Danh sách các ví tài khoản\n" +
-                "• /huy - Hoàn tác giao dịch vừa thêm\n" +
-                "• /help - Hướng dẫn chi tiết";
+    private void handleStartCommand(long chatId, String text) {
+        String[] parts = text.split("\\s+");
+        if (parts.length > 1) {
+            String param = parts[1].trim();
+            // Người dùng click deep link: /start LINK_123456 hoặc /start 123456
+            Optional<User> linkedUserOpt = telegramService.linkUserByCode(param, chatId);
+            if (linkedUserOpt.isPresent()) {
+                User user = linkedUserOpt.get();
+                String msg = "✅ <b>LIÊN KẾT TÀI KHOẢN THÀNH CÔNG!</b>\n\n" +
+                        "👤 Người dùng: <b>" + user.getName() + "</b>\n" +
+                        "📧 Email: <b>" + user.getEmail() + "</b>\n\n" +
+                        "⚡ <b>Bây giờ bạn có thể ghi chép chi tiêu siêu tốc ngay lập tức:</b>\n" +
+                        "• <code>50k cafe</code>\n" +
+                        "• <code>35k com trua vcb</code>\n" +
+                        "• <code>+15tr luong</code>\n\n" +
+                        "📊 <i>Gõ /help để xem danh sách lệnh tra cứu số dư và báo cáo.</i>";
+                botClient.sendMessage(chatId, msg);
+                return;
+            } else {
+                botClient.sendMessage(chatId,
+                        "❌ <b>Mã liên kết không hợp lệ hoặc đã hết hạn (quá 10 phút)!</b>\n\n" +
+                                "👉 Vui lòng đăng nhập vào ứng dụng Web, mở phần <b>Cài đặt Telegram</b> để tạo mã liên kết mới.");
+                return;
+            }
+        }
 
-        botClient.sendMessage(chatId, msg);
+        // Không kèm mã: Kiểm tra xem chatId này đã được liên kết hay chưa
+        Optional<User> userOpt = userRepository.findByTelegramChatIdAndStatus(chatId, Status.ACTIVE);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String msg = "👋 <b>Xin chào " + user.getName() + "!</b>\n\n" +
+                    "Tài khoản của bạn đã được liên kết với Bot Quản Lý Tài Chính Cá Nhân.\n\n" +
+                    "⚡ <b>Ghi chép chi tiêu siêu tốc tùy ý:</b>\n" +
+                    "• <code>32500 banh mi</code> (Số tiền tùy ý, không cần đơn vị)\n" +
+                    "• <code>127.500 sieu thi</code> (Có dấu chấm phân cách)\n" +
+                    "• <code>45.5k cafe</code> hoặc <code>50k cf</code>\n" +
+                    "• <code>35k com trua vcb</code> (Tự lưu ví VCB)\n" +
+                    "• <code>+15tr luong</code> (Ghi nhận thu nhập)\n" +
+                    "• <code>1.25tr tien nha</code>\n\n" +
+                    "📊 <b>Các lệnh tra cứu nhanh:</b>\n" +
+                    "• /sodu - Xem số dư các ví & tổng tài sản\n" +
+                    "• /homnay - Xem tổng chi hôm nay\n" +
+                    "• /thangnay - Báo cáo thu chi tháng này\n" +
+                    "• /vi - Danh sách các ví tài khoản\n" +
+                    "• /huy - Hoàn tác giao dịch vừa thêm\n" +
+                    "• /help - Hướng dẫn chi tiết";
+            botClient.sendMessage(chatId, msg);
+        } else {
+            String msg = "👋 <b>Chào mừng bạn đến với Bot Quản Lý Tài Chính Cá Nhân!</b>\n\n" +
+                    "🔒 <b>Bảo mật tài khoản (Whitelist Guard):</b>\n" +
+                    "Bot hoạt động ở chế độ riêng tư. Để sử dụng bot, bạn cần liên kết với tài khoản trên ứng dụng Web.\n\n"
+                    +
+                    "👉 <b>Cách liên kết an toàn:</b>\n" +
+                    "1. Đăng nhập vào ứng dụng Web Quản lý Tài chính.\n" +
+                    "2. Vào mục <b>Cài đặt Telegram</b> và bấm <b>Tạo mã liên kết OTP</b>.\n" +
+                    "3. Bấm vào liên kết trực tiếp hiển thị trên Web, hoặc nhập lệnh tại đây:\n" +
+                    "<code>/link &lt;mã_otp_6_số&gt;</code>\n\n" +
+                    "<i>Ví dụ: <code>/link 849201</code></i>";
+            botClient.sendMessage(chatId, msg);
+        }
     }
 
     private void handleHelpCommand(long chatId) {
-        String msg =
-                "📖 <b>HƯỚNG DẪN CÚ PHÁP NHẬP LIỆU</b>\n\n" +
-                "💡 <b>Quy tắc nhập số tiền cực kỳ linh hoạt:</b>\n" +
-                "1. <b>Số tiền tùy ý bất kỳ:</b> <code>32500</code>, <code>127500</code>, <code>1500000</code>...\n" +
-                "2. <b>Dấu chấm/phẩy hàng nghìn:</b> <code>32.500</code>, <code>127,500</code>, <code>1.250.000</code>...\n" +
-                "3. <b>Viết tắt hàng nghìn:</b> <code>45k</code>, <code>45.5k</code>, <code>18k</code>, <code>33 nghin</code>...\n" +
-                "4. <b>Viết tắt hàng triệu:</b> <code>1.5tr</code>, <code>12.3tr</code>, <code>2m</code>, <code>2 trieu</code>...\n" +
-                "5. <b>Vị trí tự do:</b> Số tiền có thể ở đầu (<code>50k cf</code>) hoặc ở cuối (<code>cf 50k</code>).\n\n" +
-                "📌 <b>Chỉ định ví thanh toán:</b>\n" +
-                "Thêm tên ví vào tin nhắn (ví dụ: <code>vcb</code>, <code>momo</code>, <code>mb</code>, <code>tien mat</code>...).\n" +
-                "<i>Nếu không ghi ví, bot tự trừ vào ví tiền mặt hoặc ví hoạt động đầu tiên.</i>\n\n" +
-                "💰 <b>Ghi nhận thu nhập:</b>\n" +
-                "Thêm dấu <code>+</code> ở đầu hoặc ghi các từ như <code>thu</code>, <code>luong</code>, <code>thuong</code> (ví dụ: <code>+15tr luong</code>, <code>thu 200k ban sach</code>).\n\n" +
-                "🔄 <b>Lỡ gõ nhầm?</b>\n" +
-                "Chỉ cần gõ <code>/huy</code> để xóa giao dịch vừa tạo và phục hồi số dư ví ngay lập tức.";
+        String msg = "📖 <b>CẨM NANG HƯỚNG DẪN CÚ PHÁP SỬ DỤNG BOT</b>\n\n" +
+                "⚡ <b>1. CÚ PHÁP GHI CHÉP TỰ NHIÊN:</b>\n" +
+                "Cấu trúc: <code>[Số tiền] [Nội dung] [Tên ví]</code>\n" +
+                "<i>(Vị trí các thành phần hoàn toàn tự do, không phân biệt chữ hoa hay chữ thường)</i>\n\n" +
+                "• <code>50k cafe</code> ➔ Chi 50.000đ Ăn uống (dùng ví mặc định)\n" +
+                "• <code>com trua 35k vcb</code> ➔ Chi 35.000đ Ăn uống trừ ví VCB\n" +
+                "• <code>100 do xang cash</code> ➔ Chi 100.000đ Di chuyển trừ ví Tiền mặt\n" +
+                "• <code>1.5tr mua giay mb</code> ➔ Chi 1.500.000đ Mua sắm trừ ví MB Bank\n\n" +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "💵 <b>2. QUY TẮC NHẬP SỐ TIỀN CỰC KỲ LINH HOẠT:</b>\n" +
+                "• <b>Viết tắt nghìn:</b> <code>50k</code>, <code>45.5k</code>, <code>30 nghin</code>, <code>30 ngan</code>\n"
+                +
+                "• <b>Viết tắt triệu:</b> <code>1.5tr</code>, <code>2m</code>, <code>12.3tr</code>, <code>2 trieu</code>\n"
+                +
+                "• <b>Viết tắt tỷ:</b> <code>1ty</code>, <code>1.2ty</code>, <code>1b</code>\n" +
+                "• <b>Số nhỏ &lt; 1000:</b> Tự động hiểu là nghìn! (<code>100 do xang</code> = 100.000đ, <code>35 com trua</code> = 35.000đ)\n"
+                +
+                "• <b>Số có dấu chấm/phẩy:</b> <code>32.500</code>, <code>127,500</code>, <code>1.250.000</code>\n" +
+                "• <b>Số nguyên bất kỳ:</b> <code>32500 banh mi</code>, <code>50000</code>\n" +
+                "• <b>Số lẻ có đơn vị:</b> <code>500d keo</code>, <code>500vnd</code> ➔ hiểu là 500đ\n\n" +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "🏦 <b>3. CHỈ ĐỊNH VÍ NGUỒN THANH TOÁN:</b>\n" +
+                "Thêm tên ví hoặc từ khóa vào tin nhắn (ví dụ: <code>vcb</code>, <code>momo</code>, <code>mb</code>, <code>cash</code>, <code>tien mat</code>, <code>tpb</code>, <code>zalopay</code>...).\n\n"
+                +
+                "⚠️ <b>Lưu ý quan trọng về ví:</b>\n" +
+                "• Tên ví bạn nhập <b>bắt buộc phải tồn tại</b> trong tài khoản của bạn. Nếu không tìm thấy, Bot sẽ <b>từ chối</b> giao dịch và liệt kê danh sách ví bạn đang có để bạn chọn lại, tuyệt đối không trừ nhầm ví khác.\n"
+                +
+                "• <b>Nếu không nhập ví:</b> Bot sẽ ưu tiên trừ vào <b>Ví Tiền mặt</b> (hoặc ví hoạt động đầu tiên của bạn).\n"
+                +
+                "• Gõ <code>/vi</code> để kiểm tra danh sách chính xác các ví bạn đang sở hữu.\n\n" +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "💰 <b>4. GHI NHẬN KHOẢN THU NHẬP (INCOME):</b>\n" +
+                "• <b>Thêm dấu <code>+</code>:</b> <code>+15tr luong vcb</code>, <code>+500k tien thuong</code>\n" +
+                "• <b>Dùng từ khóa thu:</b> <code>thu 200k ban sach</code>, <code>nhan 1tr tra no</code>\n" +
+                "• <b>Tự động nhận diện:</b> Tin nhắn chứa các từ như <code>luong</code>, <code>thuong</code>, <code>lai</code>... sẽ tự động được ghi nhận là Thu nhập.\n\n"
+                +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "🤖 <b>5. TỰ ĐỘNG PHÂN LOẠI DANH MỤC:</b>\n" +
+                "Bot tự động gắn danh mục và biểu tượng theo nội dung bạn gõ:\n" +
+                "• 🍜 <b>Ăn uống:</b> cafe, com, pho, tra sua, banh mi, an toi...\n" +
+                "• 🛵 <b>Di chuyển:</b> xang, grab, be, gui xe, taxi...\n" +
+                "• 🛒 <b>Mua sắm:</b> sieu thi, quan ao, shopee, cho...\n" +
+                "• 🏠 <b>Hóa đơn:</b> dien, nuoc, internet, wifi, tien phong, tien nha...\n" +
+                "• 💊 <b>Sức khỏe:</b> thuoc, kham benh, gym...\n\n" +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "🔄 <b>6. SỬA SAI VÀ HOÀN TÁC (UNDO):</b>\n" +
+                "Nếu bạn gõ nhầm nội dung hoặc số tiền, hãy gửi ngay lệnh:\n" +
+                "👉 <code>/huy</code> hoặc <code>/undo</code>\n" +
+                "Bot sẽ lập tức xóa giao dịch gần nhất và phục hồi lại số dư ví nguyên trạng!\n\n" +
+                "━━━━━━━━━━━━━━━━━━━\n" +
+                "📋 <b>7. DANH MỤC CÁC LỆNH HỆ THỐNG:</b>\n" +
+                "• <code>/sodu</code> - Xem số dư từng ví và tổng tài sản hiện tại\n" +
+                "• <code>/vi</code> - Xem danh sách các ví đang hoạt động\n" +
+                "• <code>/homnay</code> - Báo cáo tổng chi tiêu hôm nay\n" +
+                "• <code>/thangnay</code> - Báo cáo tổng thu chi tháng này\n" +
+                "• <code>/huy</code> - Hoàn tác giao dịch vừa thêm\n" +
+                "• <code>/link &lt;mã_otp&gt;</code> - Kết nối tài khoản bằng mã OTP 6 số từ Web\n" +
+                "• <code>/unlink</code> - Hủy liên kết Telegram khỏi tài khoản Web\n" +
+                "• <code>/help</code> hoặc <code>/huongdan</code> - Mở cẩm nang hướng dẫn cú pháp này";
 
         botClient.sendMessage(chatId, msg);
     }
 
     private void handleLinkCommand(long chatId, String text) {
         String[] parts = text.split("\\s+");
-        if (parts.length < 3) {
-            botClient.sendMessage(chatId, "⚠️ Cú pháp: <code>/link &lt;email&gt; &lt;mật_khẩu&gt;</code>");
+        if (parts.length >= 3) {
+            // Người dùng nhập cú pháp cũ: /link <email> <password>
+            botClient.sendMessage(chatId,
+                    "🛡️ <b>NÂNG CẤP AN TOÀN BẢO MẬT</b>\n\n" +
+                            "Hệ thống không còn hỗ trợ gửi mật khẩu tài khoản qua chat Telegram để đảm bảo an toàn tuyệt đối.\n\n"
+                            +
+                            "👉 Vui lòng đăng nhập trên website, vào mục <b>Cài đặt Telegram</b> để tạo mã OTP 6 số (hết hạn sau 10 phút) và gõ cú pháp:\n"
+                            +
+                            "<code>/link &lt;mã_otp_6_số&gt;</code> (Ví dụ: <code>/link 849201</code>)");
             return;
         }
 
-        String email = parts[1].trim();
-        String password = parts[2].trim();
-
-        Optional<User> userOpt = userRepository.findByEmailAndStatus(email, Status.ACTIVE);
-        if (userOpt.isEmpty()) {
-            botClient.sendMessage(chatId, "❌ Không tìm thấy tài khoản với email: <b>" + email + "</b>");
+        if (parts.length == 2) {
+            String code = parts[1].trim();
+            Optional<User> linkedUserOpt = telegramService.linkUserByCode(code, chatId);
+            if (linkedUserOpt.isPresent()) {
+                User user = linkedUserOpt.get();
+                botClient.sendMessage(chatId,
+                        "✅ <b>LIÊN KẾT TÀI KHOẢN THÀNH CÔNG!</b>\n\n" +
+                                "👤 Người dùng: <b>" + user.getName() + "</b>\n" +
+                                "📧 Email: <b>" + user.getEmail() + "</b>\n\n" +
+                                "Bây giờ bạn có thể gõ ngay một khoản chi (ví dụ: <code>50k cafe</code> hoặc <code>35k com trua vcb</code>) để bắt đầu!");
+            } else {
+                botClient.sendMessage(chatId,
+                        "❌ <b>Mã liên kết không hợp lệ hoặc đã hết hạn (quá 10 phút)!</b>\n\n" +
+                                "👉 Vui lòng vào ứng dụng Web, mở phần <b>Cài đặt Telegram</b> để tạo mã OTP mới.");
+            }
             return;
         }
-
-        User user = userOpt.get();
-        String hashed = BCrypt.hashpw(password, user.getPasswordSalt());
-        if (!hashed.equals(user.getPasswordHash())) {
-            botClient.sendMessage(chatId, "❌ Mật khẩu không chính xác. Vui lòng thử lại!");
-            return;
-        }
-
-        user.setTelegramChatId(chatId);
-        userRepository.save(user);
 
         botClient.sendMessage(chatId,
-                "✅ <b>Liên kết tài khoản thành công!</b>\n\n" +
-                "👤 Người dùng: <b>" + user.getName() + "</b>\n" +
-                "📧 Email: <b>" + user.getEmail() + "</b>\n\n" +
-                "Bây giờ bạn có thể gõ ngay một khoản chi (ví dụ: <code>50k cafe</code> hoặc <code>32500 banh mi</code>) để bắt đầu!");
+                "⚠️ <b>Cú pháp liên kết:</b>\n" +
+                        "<code>/link &lt;mã_otp_6_số&gt;</code>\n\n" +
+                        "<i>Ví dụ: <code>/link 849201</code></i>\n" +
+                        "👉 Lấy mã liên kết trên ứng dụng Web tại mục <b>Cài đặt Telegram</b>.");
     }
 
     private void handleUnlinkCommand(long chatId, User user) {
-        user.setTelegramChatId(null);
-        userRepository.save(user);
-        botClient.sendMessage(chatId, "👋 <i>Đã hủy liên kết Telegram với tài khoản <b>" + user.getEmail() + "</b>.</i>");
+        telegramService.unlinkUser(user.getId());
+        botClient.sendMessage(chatId,
+                "👋 <i>Đã hủy liên kết Telegram với tài khoản <b>" + user.getEmail() + "</b>.</i>");
     }
 
     private void handleBalanceCommand(long chatId, User user) {
@@ -234,7 +314,7 @@ public class TelegramCommandHandler {
             BigDecimal bal = acc.getBalance() != null ? acc.getBalance() : BigDecimal.ZERO;
             total = total.add(bal);
             sb.append("• <b>").append(acc.getName()).append("</b>: ")
-              .append(formatMoney(bal)).append("\n");
+                    .append(formatMoney(bal)).append("\n");
         }
 
         sb.append("\n━━━━━━━━━━━━━━━\n");
@@ -248,7 +328,8 @@ public class TelegramCommandHandler {
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(23, 59, 59);
 
-        List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(user.getId(), startOfDay, endOfDay);
+        List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(user.getId(),
+                startOfDay, endOfDay);
 
         BigDecimal totalExpense = BigDecimal.ZERO;
         BigDecimal totalIncome = BigDecimal.ZERO;
@@ -287,7 +368,8 @@ public class TelegramCommandHandler {
         LocalDateTime startOfMonth = currentMonth.atDay(1).atStartOfDay();
         LocalDateTime endOfMonth = currentMonth.atEndOfMonth().atTime(23, 59, 59);
 
-        List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(user.getId(), startOfMonth, endOfMonth);
+        List<Transaction> transactions = transactionRepository.findAllByUserIdAndCreatedAtBetween(user.getId(),
+                startOfMonth, endOfMonth);
 
         BigDecimal totalExpense = BigDecimal.ZERO;
         BigDecimal totalIncome = BigDecimal.ZERO;
@@ -322,7 +404,8 @@ public class TelegramCommandHandler {
         StringBuilder sb = new StringBuilder();
         sb.append("💳 <b>DANH SÁCH VÍ & TỪ KHÓA GỢI Ý</b>\n\n");
         for (Account a : accounts) {
-            sb.append("• <b>").append(a.getName()).append("</b> (Số dư: ").append(formatMoney(a.getBalance())).append(")\n");
+            sb.append("• <b>").append(a.getName()).append("</b> (Số dư: ").append(formatMoney(a.getBalance()))
+                    .append(")\n");
         }
         sb.append("\n<i>Mẹo: Thêm tên ví vào tin nhắn (ví dụ: <code>45k com vcb</code>) để trừ đúng ví mong muốn.</i>");
 
@@ -352,9 +435,9 @@ public class TelegramCommandHandler {
             transactionService.deleteTransaction(transId, auth);
             botClient.sendMessage(chatId,
                     "🗑️ <b>ĐÃ HOÀN TÁC GIAO DỊCH THÀNH CÔNG!</b>\n\n" +
-                    "• Khoản tiền: <b>" + formatMoney(amt) + "</b>\n" +
-                    "• Ghi chú: <i>" + desc + "</i>\n\n" +
-                    "<i>Số dư ví đã được phục hồi nguyên trạng.</i>");
+                            "• Khoản tiền: <b>" + formatMoney(amt) + "</b>\n" +
+                            "• Ghi chú: <i>" + desc + "</i>\n\n" +
+                            "<i>Số dư ví đã được phục hồi nguyên trạng.</i>");
         } catch (Exception e) {
             log.error("[TelegramBot] Error deleting transaction {}: {}", transId, e.getMessage());
             botClient.sendMessage(chatId, "❌ Không thể hoàn tác giao dịch: " + e.getMessage());
@@ -364,7 +447,8 @@ public class TelegramCommandHandler {
     private void handleCreateTransaction(long chatId, User user, String text) {
         List<Account> activeAccounts = accountRepository.findAllByUserIdAndStatus(user.getId(), Status.ACTIVE);
         if (activeAccounts.isEmpty()) {
-            botClient.sendMessage(chatId, "⚠️ Bạn chưa có ví hoạt động nào trong hệ thống. Vui lòng tạo ví trên web trước.");
+            botClient.sendMessage(chatId,
+                    "⚠️ Bạn chưa có ví hoạt động nào trong hệ thống. Vui lòng tạo ví trên web trước.");
             return;
         }
 
@@ -377,19 +461,47 @@ public class TelegramCommandHandler {
         // Chọn ví thanh toán
         Account targetAccount = null;
         if (parsed.getAccountKeyword() != null) {
+            String kw = parsed.getAccountKeyword().toLowerCase();
+            boolean isCashKeyword = kw.contains("tiền mặt") || kw.contains("tien mat") || kw.contains("cash");
+
             for (Account a : activeAccounts) {
-                if (a.getName().equalsIgnoreCase(parsed.getAccountKeyword())) {
+                if (a.getName().equalsIgnoreCase(parsed.getAccountKeyword())
+                        || (isCashKeyword && (a.getType() == AccountType.CASH
+                                || a.getName().toLowerCase().contains("tiền mặt")
+                                || a.getName().toLowerCase().contains("tien mat")
+                                || a.getName().toLowerCase().contains("cash")))) {
                     targetAccount = a;
                     break;
                 }
             }
-        }
 
-        // Nếu không khớp từ khóa ví, chọn ví Tiền mặt hoặc ví đầu tiên
-        if (targetAccount == null) {
+            // Nếu người dùng chỉ định một ví cụ thể nhưng không tìm thấy trong tài khoản
+            if (targetAccount == null) {
+                StringBuilder availWallets = new StringBuilder();
+                for (int i = 0; i < activeAccounts.size(); i++) {
+                    availWallets.append("• <b>").append(activeAccounts.get(i).getName()).append("</b>\n");
+                }
+
+                String displayKw = parsed.getRawAccountKeyword() != null
+                        ? parsed.getRawAccountKeyword()
+                        : parsed.getAccountKeyword();
+                if (isCashKeyword && !displayKw.equalsIgnoreCase("tiền mặt")) {
+                    displayKw = displayKw + " (Tiền mặt)";
+                }
+
+                botClient.sendMessage(chatId,
+                        "⚠️ <b>Không tìm thấy ví: " + displayKw + "</b>\n\n" +
+                                "Tài khoản của bạn hiện chưa có ví này trong hệ thống.\n\n" +
+                                "💳 <b>Danh sách ví bạn hiện có:</b>\n" + availWallets + "\n" +
+                                "👉 Vui lòng tạo ví trên ứng dụng Web hoặc chỉ định đúng tên ví hiện có.");
+                return;
+            }
+        } else {
+            // Không chỉ định ví: Ưu tiên chọn ví Tiền mặt nếu có, nếu không chọn ví đầu
+            // tiên
             for (Account a : activeAccounts) {
                 String name = a.getName().toLowerCase();
-                if (name.contains("tiền mặt") || name.contains("tien mat") || name.contains("cash")) {
+                if (name.contains("tiền mặt") || name.contains("cash") || a.getType() == AccountType.CASH) {
                     targetAccount = a;
                     break;
                 }
@@ -423,11 +535,11 @@ public class TelegramCommandHandler {
             // Lấy lại số dư mới nhất của ví
             Account updatedAcc = accountRepository.findById(targetAccount.getId()).orElse(targetAccount);
 
-            String icon = parsed.getType() == TransactionType.INCOME ? "🟢 <b>ĐÃ THÊM THU NHẬP</b>" : "🔴 <b>ĐÃ THÊM CHI TIÊU</b>";
+            String icon = parsed.getType() == TransactionType.INCOME ? "🟢 <b>ĐÃ THÊM THU NHẬP</b>"
+                    : "🔴 <b>ĐÃ THÊM CHI TIÊU</b>";
             String sign = parsed.getType() == TransactionType.INCOME ? "+" : "-";
 
-            String responseMsg =
-                    icon + "\n\n" +
+            String responseMsg = icon + "\n\n" +
                     "💵 Số tiền: <b>" + sign + formatMoney(parsed.getAmount()) + "</b>\n" +
                     "🏷️ Danh mục: <b>" + parsed.getCategoryName() + "</b>\n" +
                     "📝 Ghi chú: <i>" + parsed.getDescription() + "</i>\n" +

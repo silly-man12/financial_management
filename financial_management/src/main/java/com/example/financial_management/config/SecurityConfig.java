@@ -46,7 +46,7 @@ public class SecurityConfig {
             "/images/**",
             "/currency-exchange/latest",
             "/currency-exchange/history",
-            "/telegram/**");
+            "/telegram/test-parse");
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
