@@ -106,17 +106,31 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ### 11. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
 - **Ghi chép giao dịch trong 3 giây bằng tin nhắn tự nhiên**:
-  - Nhập số tiền lẻ tùy ý bất kỳ: `32500 banh mi`, `127.500 sieu thi`, `45.5k cafe`, `+15tr luong`, `1.250.000 hoc phi`...
-  - Số tiền linh hoạt ở đầu hoặc cuối câu (`banh mi 32500`, `cafe 45.5k`).
-  - Tự động nhận diện danh mục tài chính thông minh qua từ khóa tiếng Việt không dấu/có dấu (Ăn uống, Di chuyển, Mua sắm, Tiện ích, Lương, Thưởng...).
-  - Tự động nhận diện và bóc tách ví thanh toán (`vcb`, `momo`, `zalopay`, `tiền mặt`, `mb`...), giữ phần ghi chú sạch đẹp.
-- **Bộ lệnh tra cứu tài chính nhanh**:
+  - Nhập số tiền linh hoạt: Viết tắt nghìn (`50k`, `45.5k`, `30 nghin`), triệu (`1.5tr`, `2m`, `12.3tr`), tỷ (`1ty`, `1b`), số có dấu phân cách (`32.500`, `127,500`), số nguyên (`32500 banh mi`), số nhỏ `< 1000` tự động hiểu là nghìn (`100 do xang` = 100.000đ), số lẻ kèm đơn vị (`500d keo` = 500đ).
+  - Vị trí tự do ở đầu hoặc cuối câu (`50k cf` hoặc `cf 50k`).
+  - Tự động nhận diện danh mục thông minh kèm biểu tượng cảm xúc (Ăn uống 🍜, Di chuyển 🛵, Mua sắm 🛒, Tiện ích 🏠, Y tế 💊...).
+  - Ghi nhận khoản Thu nhập dễ dàng: thêm dấu `+` (`+15tr luong vcb`), từ khóa `thu`, `nhan`, hoặc tự động nhận diện từ khóa thu nhập (`luong`, `thuong`, `lai`...).
+- **Chỉ định ví nguồn thông minh & Ràng buộc an toàn**:
+  - Tự động nhận diện các ví/ngân hàng phổ biến (`vcb`, `momo`, `mb`, `tien mat`, `cash`, `zalopay`, `tpb`...).
+  - **Bảo vệ ví nghiêm ngặt**: Ví được chỉ định bắt buộc phải tồn tại trong tài khoản người dùng. Nếu không tìm thấy, Bot sẽ từ chối giao dịch và hiển thị danh sách ví hiện có (`/vi`) để người dùng chọn đúng ví, tuyệt đối không trừ nhầm ví khác.
+  - Nếu không ghi tên ví: Mặc định ưu tiên trừ vào **Ví Tiền mặt** (hoặc ví hoạt động đầu tiên của bạn).
+- **Bảo mật Whitelist Guard & Liên kết OTP an toàn**:
+  - **Whitelist Guard**: Bot hoạt động ở chế độ riêng tư, chỉ phục vụ tài khoản đã xác thực liên kết, bảo vệ dữ liệu tài chính cá nhân khỏi người lạ.
+  - **Liên kết bằng OTP 6 số**: Loại bỏ hoàn toàn việc gửi mật khẩu tài khoản trong chat. Người dùng tạo mã OTP (có hạn 10 phút) trên Web và nhập `/link <mã_otp>`, hoặc click trực tiếp vào **Deep Link** `https://t.me/<bot>?start=LINK_<otp>`.
+- **Cẩm nang hướng dẫn cú pháp chi tiết (`/help`, `/huongdan`)**:
+  - Trình bày trực quan 7 mục: Cú pháp tự nhiên, Quy tắc số tiền, Chỉ định ví, Ghi nhận thu nhập, Phân loại danh mục, Sửa sai hoàn tác (`/huy`) và Danh mục lệnh hệ thống.
+- **Bộ lệnh hệ thống**:
   - `/sodu` hoặc `/balance`: Xem nhanh số dư từng ví và tổng tài sản hiện có.
-  - `/homnay` hoặc `/today`: Xem tổng số tiền đã tiêu hôm nay và chi tiết các khoản chi.
-  - `/thangnay` hoặc `/month`: Báo cáo tổng thu, tổng chi và thặng dư tích lũy trong tháng.
-  - `/vi` hoặc `/wallets`: Liệt kê danh sách các ví/tài khoản và từ khóa gợi nhớ.
-  - `/huy` hoặc `/undo`: Hoàn tác ngay giao dịch vừa nhập (tự động phục hồi số dư ví).
-  - `/link <email> <password>`: Liên kết an toàn tài khoản với Telegram Chat ID của bạn.
+  - `/homnay` hoặc `/today`: Xem tổng số tiền đã tiêu hôm nay và chi tiết từng khoản chi.
+  - `/thangnay` hoặc `/month`: Báo cáo tổng thu, tổng chi và số dư ròng trong tháng.
+  - `/vi` hoặc `/wallets`: Liệt kê danh sách các ví/tài khoản đang hoạt động kèm số dư.
+  - `/huy` hoặc `/undo`: Hoàn tác (xóa) ngay giao dịch vừa ghi nhận, phục hồi nguyên trạng số dư ví.
+  - `/link <mã_otp>`: Liên kết Telegram với tài khoản Web qua mã OTP 6 số.
+  - `/unlink`: Hủy liên kết Telegram khỏi tài khoản Web.
+  - `/help` hoặc `/huongdan`: Mở cẩm nang hướng dẫn cú pháp chi tiết.
+- **Tùy chọn thông báo tự động**:
+  - Báo cáo tài chính tổng kết cuối ngày (`telegramDailyReportEnabled`).
+  - Cảnh báo tức thì khi chi tiêu vượt hạn mức ngân sách (`telegramBudgetAlertEnabled`).
 - **Cơ chế Long Polling qua Java 21 HttpClient**:
   - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
 
@@ -166,14 +180,14 @@ financial_management/
         │   │   │   └── base/          # Base Entity (UUID id, Audit createdAt, updatedAt...)
         │   │   ├── exception/         # Xử lý lỗi toàn cục (Global Exception Handler) & Deserializers
         │   │   ├── mapper/            # MapStruct mappers (SavingGoalMapper, DebtMapper...)
-        │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse
+        │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse, telegram/
         │   │   ├── repository/        # Spring Data JPA Repositories (TransactionRepository, ...)
         │   │   ├── services/          # Business Logic Services (TransactionService, ReportService...)
-        │   │   ├── telegram/          # Telegram Bot: Config, Client, PollingService, Parser, CommandHandler
+        │   │   ├── telegram/          # Telegram Bot: Config, Client, PollingService, Parser, CommandHandler, Service
         │   │   └── util/              # Tiện ích bổ trợ (JwtTokenUtil, DateTimeUtils...)
         │   └── resources/
         │       └── application.properties # Cấu hình Database, Mail, JWT, Cổng chạy...
-        └── test/                      # Unit & Integration Tests (TelegramMessageParserTest...)
+        └── test/                      # Unit & Integration Tests (TelegramCommandHandlerTest, TelegramServiceTest...)
 ```
 
 ---
@@ -424,8 +438,14 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 ### 12. Bot Telegram (`/telegram`)
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
 |---|---|---|---|
-| `GET` | `/telegram/test-parse?text={content}` | Public | Kiểm tra kết quả bóc tách cú pháp số tiền, danh mục và ví thanh toán |
-| `POST` | `/telegram/simulate?text={content}&email={e}` | Public | Giả lập gửi tin nhắn Telegram vào hệ thống (thực hiện ghi chép thật) |
+| `GET` | `/telegram/status` | Authenticated | Lấy trạng thái liên kết Telegram của người dùng hiện tại (Chat ID, username, tên, cài đặt thông báo) |
+| `POST` | `/telegram/generate-link-code` | Authenticated | **Tạo mã OTP liên kết 6 số** và Deep Link Telegram trực tiếp (mã hết hạn sau 10 phút) |
+| `POST` | `/telegram/unlink` | Authenticated | Hủy liên kết tài khoản Telegram khỏi tài khoản Web |
+| `POST` | `/telegram/settings` | Authenticated | Cập nhật tùy chọn nhận thông báo: Báo cáo hàng ngày (`dailyReport`) và Cảnh báo ngân sách (`budgetAlert`) |
+| `POST` | `/telegram/test-daily-summary` | Authenticated | Gửi tin nhắn thử nghiệm Báo cáo tổng kết chi tiêu hôm nay về Telegram Bot |
+| `POST` | `/telegram/test-budget-alert` | Authenticated | Gửi tin nhắn thử nghiệm Cảnh báo vượt hạn mức ngân sách về Telegram Bot |
+| `POST` | `/telegram/simulate?text={content}` | Authenticated | Giả lập gửi tin nhắn Telegram vào hệ thống (thực hiện ghi chép thật, bảo vệ bằng tài khoản đăng nhập) |
+| `GET` | `/telegram/test-parse?text={content}` | Public / Auth | Kiểm tra thử nghiệm kết quả bóc tách cú pháp số tiền, danh mục và ví nguồn (không lưu DB) |
 
 ### 13. Màn hình Tổng quan - Dashboard (`/dashboard`)
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
@@ -632,4 +652,14 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
    - `OAuthService` sử dụng Java 21 `HttpClient` giao tiếp trực tiếp với máy chủ Google Identity Platform (`https://oauth2.googleapis.com/token`) để đổi `code` lấy `id_token`.
    - Xác thực email người dùng từ `id_token` (Base64 decode payload JSON), kiểm tra người dùng trong cơ sở dữ liệu (`UserService.existsByEmail`), và sinh JWT Token qua `JwtTokenUtil`.
    - Bảo mật chuyển hướng thông qua chuỗi `state` mã hóa Base64 chứa `base` và `returnUrl`, đảm bảo tương thích đa môi trường (Localhost 8080, Vue Client 5173, Production).
+
+6. **Bảo mật Bot Telegram (Whitelist Guard & Xác thực OTP 6 số)**:
+   - **Whitelist Guard Chặn Người lạ**: Bot Telegram hoạt động ở chế độ riêng tư (Private Guard). Mọi tin nhắn giao dịch hoặc câu lệnh tra cứu tài chính từ các Telegram Chat ID chưa từng được liên kết và kích hoạt trong hệ thống đều bị chặn lại và từ chối xử lý, kèm hướng dẫn liên kết bảo mật.
+   - **Xác thực Liên kết OTP 6 số (Thay thế Mật khẩu Bản rõ)**:
+     - Hệ thống loại bỏ hoàn toàn cơ chế liên kết cũ qua tin nhắn chat (`/link email password`) nhằm triệt tiêu nguy cơ lộ lọt mật khẩu trong nhật ký chat Telegram.
+     - Thay vào đó, mã OTP 6 số ngẫu nhiên được sinh ra từ Web, lưu tạm trong bộ nhớ đệm an toàn (`ConcurrentHashMap`) kèm thời gian hết hạn nghiêm ngặt (10 phút).
+     - Hỗ trợ **Deep Link** `https://t.me/<bot>?start=LINK_<otp>`, cho phép người dùng click liên kết trực tiếp trên trình duyệt để kích hoạt bot một chạm mà không cần sao chép mã thủ công.
+   - **Bảo vệ Phân quyền & Loại trừ Lỗ hổng IDOR trên API Telegram**:
+     - Tất cả các endpoint quản lý trạng thái, tạo mã OTP, hủy kết nối và cấu hình thông báo (`/telegram/**`) đều được bảo vệ bằng JWT Token (`@AuthenticationPrincipal Auth`).
+     - Endpoint giả lập `/telegram/simulate` được ràng buộc chặt chẽ với định danh tài khoản đang đăng nhập; chỉ tài khoản `ROLE_ADMIN` mới có quyền giả lập cho email khác, ngăn ngừa hoàn toàn nguy cơ thao túng dữ liệu trái phép.
 
