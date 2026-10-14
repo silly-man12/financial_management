@@ -170,6 +170,7 @@ public class TelegramMessageParser {
 
         // 4. Tìm kiếm ví / tài khoản khớp với danh sách ví của người dùng
         String matchedAccountKeyword = null;
+        String rawAccountKeyword = null;
         if (activeAccounts != null && !activeAccounts.isEmpty()) {
             for (Account acc : activeAccounts) {
                 String accName = acc.getName();
@@ -179,6 +180,7 @@ public class TelegramMessageParser {
                     Matcher m = kwPattern.matcher(remainingText);
                     if (m.find()) {
                         matchedAccountKeyword = acc.getName();
+                        rawAccountKeyword = m.group(0);
                         // Xóa từ khóa ví khỏi ghi chú để ghi chú sạch sẽ
                         remainingText = m.replaceFirst("").replaceAll("\\s+", " ").trim();
                         break;
@@ -197,6 +199,7 @@ public class TelegramMessageParser {
                 Matcher m = kwPattern.matcher(remainingText);
                 if (m.find()) {
                     matchedAccountKeyword = entry.getValue();
+                    rawAccountKeyword = m.group(0);
                     remainingText = m.replaceFirst("").replaceAll("\\s+", " ").trim();
                     break;
                 }
@@ -228,6 +231,7 @@ public class TelegramMessageParser {
                 .category(detectedCategory)
                 .categoryName(getCategoryVietnameseName(detectedCategory))
                 .accountKeyword(matchedAccountKeyword)
+                .rawAccountKeyword(rawAccountKeyword)
                 .description(description)
                 .rawInput(raw)
                 .build();

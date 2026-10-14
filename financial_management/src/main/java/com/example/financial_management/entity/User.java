@@ -35,4 +35,10 @@ public class User extends EntityBase {
 
     @Column(name = "telegram_chat_id", nullable = true)
     private Long telegramChatId;
+
+    @Column(name = "telegram_daily_report_enabled", nullable = false, columnDefinition = "bit default 1")
+    private boolean telegramDailyReportEnabled = true;
+
+    @Column(name = "telegram_budget_alert_enabled", nullable = false, columnDefinition = "bit default 1")
+    private boolean telegramBudgetAlertEnabled = true;
 }
