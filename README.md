@@ -111,6 +111,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - Tự động nhận diện danh mục thông minh kèm biểu tượng cảm xúc (Ăn uống 🍜, Di chuyển 🛵, Mua sắm 🛒, Tiện ích 🏠, Y tế 💊...).
   - Ghi nhận khoản Thu nhập dễ dàng: thêm dấu `+` (`+15tr luong vcb`), từ khóa `thu`, `nhan`, hoặc tự động nhận diện từ khóa thu nhập (`luong`, `thuong`, `lai`...).
   - **Bóc tách thẻ hashtag `#tag` (Smart Syntax)**: Tự động trích xuất hashtag trong câu (ví dụ: `xang 70k #di-lai`, `cf 35k #cafe`, `an toi 150k #an-uong #tiec-tung`), tự động phân giải/tạo thẻ tag, lưu vào giao dịch và hiển thị thẻ `🏷️ Thẻ: #tag` trong thông báo phản hồi của bot.
+  - **Tự động đối soát và phản hồi trạng thái ngân sách**: Khi ghi chép chi tiêu có gắn thẻ `#tag` (hoặc chi tiêu danh mục chung), bot tự động tính toán lại và hiển thị số tiền còn lại và tỷ lệ % ngân sách chiếm dụng ngay trong tin nhắn xác nhận (ví dụ: `📊 Ngân sách Ăn uống 🍜 (Thẻ #cafe): Còn lại 50.000 ₫ (chiếm 95.0%)`).
 - **Chỉ định ví nguồn thông minh & Ràng buộc an toàn**:
   - Tự động nhận diện các ví/ngân hàng phổ biến (`vcb`, `momo`, `mb`, `tien mat`, `cash`, `zalopay`, `tpb`...).
   - **Bảo vệ ví nghiêm ngặt**: Ví được chỉ định bắt buộc phải tồn tại trong tài khoản người dùng. Nếu không tìm thấy, Bot sẽ từ chối giao dịch và hiển thị danh sách ví hiện có (`/vi`) để người dùng chọn đúng ví, tuyệt đối không trừ nhầm ví khác.
@@ -131,10 +132,11 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - `/help` hoặc `/huongdan`: Mở cẩm nang hướng dẫn cú pháp chi tiết.
 - **Hệ thống thông báo & Cảnh báo tài chính tự động**:
   - **Báo cáo tổng kết 21:30 mỗi tối (`TelegramDailySummaryCronjob`)**: Cronjob tự động quét lúc `21:30` hàng ngày (`Asia/Ho_Chi_Minh`), gửi bản tin tài chính trong ngày cho người dùng bật `telegramDailyReportEnabled`: tổng số tiền đã chi, số giao dịch đã thực hiện và số dư ngân sách tháng còn lại.
-  - **Cảnh báo ngân sách tức thì $\ge 90\%$ (`checkAndSendBudgetAlert`)**: Kích hoạt theo thời gian thực ngay khi phát sinh giao dịch chi tiêu (`EXPENSE`), phân tách thông minh theo thẻ hashtag:
+  - **Cảnh báo ngân sách tức thì $\ge 90\%$ (`checkAndSendBudgetAlert`)**: Kích hoạt theo thời gian thực ngay khi phát sinh giao dịch chi tiêu (`EXPENSE`), phân tách thông minh theo thẻ hashtag (nhận diện qua `tagName`, danh sách `tags`, và `tagId`):
     - *Giao dịch có `#tag` và đã có ngân sách riêng cho thẻ đó*: Kiểm tra và gửi cảnh báo trực tiếp cho ngân sách của thẻ (`Ăn uống 🍜 (Thẻ #tag)`).
     - *Giao dịch có `#tag` nhưng chưa có ngân sách riêng (hoặc không gắn thẻ)*: Hạch toán vào ngân sách chung của danh mục (`Ăn uống 🍜`), trong đó ngân sách chung tự động loại trừ chi tiêu của các thẻ đã có ngân sách riêng.
-    - Tự động thay đổi cấp độ cảnh báo: `⚠️ CẢNH BÁO VƯỢT NGÂN SÁCH!` khi $\ge 90\%$ và `🚨 BÁO ĐỘNG ĐỎ VƯỢT NGÂN SÁCH!` khi $\ge 100\%$.
+    - **Nội dung cảnh báo chi tiết**: Hiển thị rõ danh mục/thẻ, tỷ lệ % chiếm dụng ngân sách (`📊 Chiếm ngân sách: 95.0%`), số tiền đã chi/hạn mức (`💵 Đã chi: 950.000 ₫ / Hạn mức: 1.000.000 ₫`), và số tiền còn lại (`💰 Số tiền còn lại: 50.000 ₫`).
+    - **Phân cấp báo động**: `⚠️ CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!` khi $\ge 90\%$ và `🚨 BÁO ĐỘNG ĐỎ VƯỢT HẠN MỨC NGÂN SÁCH!` khi $\ge 100\%$ (kèm số tiền vượt hạn mức).
 - **Cơ chế Long Polling qua Java 21 HttpClient**:
   - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
 

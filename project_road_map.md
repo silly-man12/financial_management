@@ -137,10 +137,11 @@ flowchart TD
   - Tự động lắng nghe cập nhật qua Java 21 `HttpClient` Long Polling không cần mở port modem.
   - Bộ bóc tách NLP tiếng Việt thông minh cho số tiền lẻ, danh mục và tên ví.
   - Bóc tách thẻ hashtag `#tag` (Smart Syntax: `xang 70k #di-lai`, `cf 35k #cafe`, `an toi 150k #tiec-tung`).
+  - Tự động đối soát ngân sách: Tính toán số tiền còn lại và tỷ lệ % ngân sách theo thẻ/chung ngay trong phản hồi ghi chép.
   - Whitelist Guard bảo mật tài khoản cá nhân, cơ chế mã liên kết OTP 6 số và deep link.
   - Hệ thống 6 API quản lý trên Web (`/status`, `/generate-link-code`, `/unlink`, `/settings`, `/test-daily-summary`, `/test-budget-alert`).
   - Tự động gửi báo cáo tổng kết chi tiêu lúc 21:30 hàng ngày (`TelegramDailySummaryCronjob`).
-  - Cảnh báo tức thì khi chi tiêu vượt $\ge 90\%$ ngân sách (tự động phân tách thẻ tag và danh mục chung).
+  - Cảnh báo tức thì khi chi tiêu vượt $\ge 90\%$ ngân sách (tự động phân tách thẻ tag và danh mục chung, hiển thị rõ số tiền còn lại và % chiếm dụng).
   - Các lệnh tra cứu nhanh: `/sodu`, `/homnay`, `/thangnay`, `/vi`, `/huy`, `/link`, `/unlink`, `/help`.
 
 ---
@@ -220,7 +221,7 @@ sequenceDiagram
   - Telegram bot nhận file tin nhắn thoại `.oga` $\rightarrow$ Backend chuyển đổi sang text qua OpenAI Whisper hoặc Gemini Audio $\rightarrow$ Chuyển văn bản qua `TelegramMessageParser` để tự động tạo giao dịch.
 - [x] **Cronjob Thông Báo & Cảnh Báo Tài Chính Cá Nhân (Đã hoàn thành trước tiến độ ở Q4/2026)**:
   - Tác vụ định kỳ quét lúc `21:30` mỗi tối (`TelegramDailySummaryCronjob`): Tổng hợp thu chi trong ngày, số lượng giao dịch và số dư ngân sách tháng còn lại gửi qua Bot Telegram.
-  - Cảnh báo tự động gửi qua Telegram ngay khi một khoản chi khiến ngân sách danh mục hoặc thẻ tag vượt quá $90\%$ (và báo động đỏ khi vượt $100\%$).
+  - Cảnh báo tự động gửi qua Telegram ngay khi một khoản chi khiến ngân sách danh mục hoặc thẻ tag vượt quá $90\%$ (hiển thị rõ số tiền còn lại, tỷ lệ % chiếm dụng ngân sách, và báo động đỏ khi vượt $100\%$).
 
 ---
 
