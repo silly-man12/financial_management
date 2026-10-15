@@ -111,7 +111,7 @@ Các thành phần đã được triển khai tại package `com.example.financi
 
 ---
 
-#### ④ `PUT /telegram/settings`
+#### ④ `POST /telegram/settings`
 * **Mục đích**: Tùy chỉnh bật/tắt nhận báo cáo tối và cảnh báo ngân sách.
 * **Request Body**:
 ```json
