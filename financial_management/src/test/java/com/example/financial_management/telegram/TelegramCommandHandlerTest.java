@@ -50,6 +50,9 @@ class TelegramCommandHandlerTest {
     @Mock
     private TelegramService telegramService;
 
+    @Mock
+    private com.example.financial_management.services.BudgetService budgetService;
+
     private TelegramBotConfig config;
     private TelegramCommandHandler commandHandler;
 
@@ -73,7 +76,8 @@ class TelegramCommandHandlerTest {
                 accountRepository,
                 transactionRepository,
                 transactionService,
-                telegramService
+                telegramService,
+                budgetService
         );
 
         sampleUser = new User();
@@ -82,6 +86,8 @@ class TelegramCommandHandlerTest {
         sampleUser.setEmail("nghyqn1201@gmail.com");
         sampleUser.setStatus(Status.ACTIVE);
         sampleUser.setTelegramChatId(ownerChatId);
+        sampleUser.setTelegramDailyReportEnabled(true);
+        sampleUser.setTelegramBudgetAlertEnabled(true);
     }
 
     @Test
@@ -305,5 +311,421 @@ class TelegramCommandHandlerTest {
 
         String msg = captor.getValue();
         assertTrue(msg.contains("CẨM NANG HƯỚNG DẪN CÚ PHÁP SỬ DỤNG BOT"));
+    }
+
+    @Test
+    @DisplayName("Cảnh báo ngân sách tức thì: Bắn cảnh báo đỏ khi chi tiêu khiến ngân sách danh mục đạt >= 90%")
+    void testExpenseWithBudgetExceeding90PercentSendsAlert() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("150000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("An trua")
+                .build();
+
+        when(messageParser.parse(eq("150k an trua"), any())).thenReturn(parsed);
+        when(messageParser.getCategoryVietnameseName(Category.FOOD)).thenReturn("Ăn uống 🍜");
+
+        com.example.financial_management.model.budget.BudgetCheckingResponse budgetResp =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        budgetResp.setCategory(Category.FOOD);
+        budgetResp.setAmount(new BigDecimal("5000000"));
+        budgetResp.setSpending(new BigDecimal("4625000"));
+        budgetResp.setUsedPercentage(new BigDecimal("92.5"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(budgetResp));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "150k an trua");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(botClient, times(2)).sendMessage(eq(ownerChatId), captor.capture());
+
+        List<String> messages = captor.getAllValues();
+        // Tin nhắn 1: Thông báo ghi nhận chi tiêu
+        assertTrue(messages.get(0).contains("ĐÃ THÊM CHI TIÊU"));
+        // Tin nhắn 2: Cảnh báo đỏ vượt 90% hạn mức ngân sách
+        String alertMsg = messages.get(1);
+        assertTrue(alertMsg.contains("CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!"));
+        assertTrue(alertMsg.contains("Ăn uống 🍜"));
+        assertTrue(alertMsg.contains("92.5%"));
+        assertTrue(alertMsg.contains("4.625.000 ₫"));
+        assertTrue(alertMsg.contains("5.000.000 ₫"));
+        assertTrue(alertMsg.contains("Bạn sắp chạm trần ngân sách cho tháng này!"));
+    }
+
+    @Test
+    @DisplayName("Cảnh báo ngân sách tức thì: Báo động đã vượt quá trần ngân sách khi usedPercentage >= 100%")
+    void testExpenseWithBudgetExceeding100PercentSendsAlert() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("200000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Lau bo")
+                .build();
+
+        when(messageParser.parse(eq("200k lau bo"), any())).thenReturn(parsed);
+        when(messageParser.getCategoryVietnameseName(Category.FOOD)).thenReturn("Ăn uống 🍜");
+
+        com.example.financial_management.model.budget.BudgetCheckingResponse budgetResp =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        budgetResp.setCategory(Category.FOOD);
+        budgetResp.setAmount(new BigDecimal("5000000"));
+        budgetResp.setSpending(new BigDecimal("5250000"));
+        budgetResp.setUsedPercentage(new BigDecimal("105.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(budgetResp));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "200k lau bo");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(botClient, times(2)).sendMessage(eq(ownerChatId), captor.capture());
+
+        String alertMsg = captor.getAllValues().get(1);
+        assertTrue(alertMsg.contains("105.0%"));
+        assertTrue(alertMsg.contains("Bạn đã vượt quá hạn mức ngân sách cho tháng này!"));
+    }
+
+    @Test
+    @DisplayName("Không gửi cảnh báo ngân sách khi usedPercentage < 90%")
+    void testExpenseWithBudgetBelow90PercentNoAlert() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("50000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Cafe")
+                .build();
+
+        when(messageParser.parse(eq("50k cafe"), any())).thenReturn(parsed);
+
+        com.example.financial_management.model.budget.BudgetCheckingResponse budgetResp =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        budgetResp.setCategory(Category.FOOD);
+        budgetResp.setAmount(new BigDecimal("5000000"));
+        budgetResp.setSpending(new BigDecimal("3500000"));
+        budgetResp.setUsedPercentage(new BigDecimal("70.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(budgetResp));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "50k cafe");
+
+        // Chỉ có 1 tin nhắn thông báo giao dịch được gửi, không có cảnh báo
+        verify(botClient, times(1)).sendMessage(eq(ownerChatId), anyString());
+    }
+
+    @Test
+    @DisplayName("Không gửi cảnh báo ngân sách nếu người dùng tắt cấu hình budgetAlertEnabled")
+    void testExpenseWhenBudgetAlertDisabledNoAlert() {
+        sampleUser.setTelegramBudgetAlertEnabled(false);
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("50000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Cafe")
+                .build();
+
+        when(messageParser.parse(eq("50k cafe"), any())).thenReturn(parsed);
+
+        commandHandler.handleIncomingMessage(ownerChatId, "50k cafe");
+
+        // Chỉ có 1 tin nhắn thêm giao dịch được gửi, không tương tác với budgetService
+        verify(botClient, times(1)).sendMessage(eq(ownerChatId), anyString());
+        verifyNoInteractions(budgetService);
+    }
+
+    @Test
+    @DisplayName("Cảnh báo ngân sách có tag: Bắn cảnh báo đúng thẻ khi chi tiêu có hashtag khớp với ngân sách tag")
+    void testExpenseWithTagTriggersTaggedBudgetAlert() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("50000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Cf")
+                .tags(List.of("cafe"))
+                .build();
+
+        when(messageParser.parse(eq("50k cf #cafe"), any())).thenReturn(parsed);
+        when(messageParser.getCategoryVietnameseName(Category.FOOD)).thenReturn("Ăn uống 🍜");
+
+        // Ngân sách 1: Ăn uống chung (chưa chạm ngưỡng, 50%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse generalBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        generalBudget.setCategory(Category.FOOD);
+        generalBudget.setAmount(new BigDecimal("5000000"));
+        generalBudget.setSpending(new BigDecimal("2500000"));
+        generalBudget.setUsedPercentage(new BigDecimal("50.0"));
+
+        // Ngân sách 2: Ăn uống gắn thẻ #cafe (vượt ngưỡng 95%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse cafeBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        cafeBudget.setCategory(Category.FOOD);
+        cafeBudget.setTagName("cafe");
+        cafeBudget.setAmount(new BigDecimal("1000000"));
+        cafeBudget.setSpending(new BigDecimal("950000"));
+        cafeBudget.setUsedPercentage(new BigDecimal("95.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(generalBudget, cafeBudget));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "50k cf #cafe");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(botClient, times(2)).sendMessage(eq(ownerChatId), captor.capture());
+
+        List<String> messages = captor.getAllValues();
+        String alertMsg = messages.get(1);
+        assertTrue(alertMsg.contains("CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!"));
+        assertTrue(alertMsg.contains("Ăn uống 🍜 (Thẻ #cafe)"));
+        assertTrue(alertMsg.contains("95.0%"));
+        assertTrue(alertMsg.contains("950.000 ₫"));
+        assertTrue(alertMsg.contains("1.000.000 ₫"));
+        assertTrue(alertMsg.contains("Bạn sắp chạm trần ngân sách cho tháng này!"));
+    }
+
+    @Test
+    @DisplayName("Cảnh báo ngân sách chung: Khoản chi không có tag sẽ tính vào ngân sách chung (trừ tag)")
+    void testExpenseWithoutTagTriggersGeneralBudgetAlertExcludingTaggedBudget() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("40000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Com trua")
+                .tags(List.of())
+                .build();
+
+        when(messageParser.parse(eq("40k com trua"), any())).thenReturn(parsed);
+        when(messageParser.getCategoryVietnameseName(Category.FOOD)).thenReturn("Ăn uống 🍜");
+
+        // Ngân sách 1: Ăn uống chung (đã chạm ngưỡng 92.5%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse generalBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        generalBudget.setCategory(Category.FOOD);
+        generalBudget.setAmount(new BigDecimal("4000000"));
+        generalBudget.setSpending(new BigDecimal("3700000"));
+        generalBudget.setUsedPercentage(new BigDecimal("92.5"));
+
+        // Ngân sách 2: Ăn uống gắn thẻ #cafe (chỉ mới 40%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse cafeBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        cafeBudget.setCategory(Category.FOOD);
+        cafeBudget.setTagName("cafe");
+        cafeBudget.setAmount(new BigDecimal("1000000"));
+        cafeBudget.setSpending(new BigDecimal("400000"));
+        cafeBudget.setUsedPercentage(new BigDecimal("40.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(generalBudget, cafeBudget));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "40k com trua");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(botClient, times(2)).sendMessage(eq(ownerChatId), captor.capture());
+
+        String alertMsg = captor.getAllValues().get(1);
+        assertTrue(alertMsg.contains("CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!"));
+        assertTrue(alertMsg.contains("Ăn uống 🍜"));
+        assertFalse(alertMsg.contains("Thẻ #cafe"));
+        assertTrue(alertMsg.contains("92.5%"));
+    }
+
+    @Test
+    @DisplayName("Khoản chi có tag không kích hoạt cảnh báo ngân sách chung ngay cả khi ngân sách chung >= 90%")
+    void testExpenseWithTagDoesNotTriggerGeneralBudgetAlertEvenIfGeneralExceeds90() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("50000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Cf")
+                .tags(List.of("cafe"))
+                .build();
+
+        when(messageParser.parse(eq("50k cf #cafe"), any())).thenReturn(parsed);
+
+        // Ngân sách 1: Ăn uống chung (vượt ngưỡng 95%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse generalBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        generalBudget.setCategory(Category.FOOD);
+        generalBudget.setAmount(new BigDecimal("4000000"));
+        generalBudget.setSpending(new BigDecimal("3800000"));
+        generalBudget.setUsedPercentage(new BigDecimal("95.0"));
+
+        // Ngân sách 2: Ăn uống gắn thẻ #cafe (mới 50%, an toàn)
+        com.example.financial_management.model.budget.BudgetCheckingResponse cafeBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        cafeBudget.setCategory(Category.FOOD);
+        cafeBudget.setTagName("cafe");
+        cafeBudget.setAmount(new BigDecimal("1000000"));
+        cafeBudget.setSpending(new BigDecimal("500000"));
+        cafeBudget.setUsedPercentage(new BigDecimal("50.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(generalBudget, cafeBudget));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "50k cf #cafe");
+
+        // Vì khoản chi này thuộc thẻ #cafe (ngân sách cafe mới 50%), và bị loại trừ khỏi ngân sách chung
+        // nên không có cảnh báo nào được gửi!
+        verify(botClient, times(1)).sendMessage(eq(ownerChatId), anyString());
+    }
+
+    @Test
+    @DisplayName("Gắn tag chưa có ngân sách riêng: Tự động hạch toán vào ngân sách chung và cảnh báo nếu ngân sách chung >= 90%")
+    void testExpenseWithUntrackedTagFallsBackToGeneralBudgetAndAlerts() {
+        when(userRepository.findByTelegramChatIdAndStatus(ownerChatId, Status.ACTIVE))
+                .thenReturn(Optional.of(sampleUser));
+
+        Account cashAcc = new Account();
+        cashAcc.setId(UUID.randomUUID());
+        cashAcc.setName("Tiền mặt");
+        cashAcc.setBalance(new BigDecimal("1000000"));
+
+        when(accountRepository.findAllByUserIdAndStatus(sampleUser.getId(), Status.ACTIVE))
+                .thenReturn(List.of(cashAcc));
+        when(accountRepository.findById(cashAcc.getId())).thenReturn(Optional.of(cashAcc));
+
+        TelegramParsedTransaction parsed = TelegramParsedTransaction.builder()
+                .success(true)
+                .amount(new BigDecimal("40000"))
+                .type(TransactionType.EXPENSE)
+                .category(Category.FOOD)
+                .categoryName("Ăn uống 🍜")
+                .description("Tra sua")
+                .tags(List.of("banbe"))
+                .build();
+
+        when(messageParser.parse(eq("40k tra sua #banbe"), any())).thenReturn(parsed);
+        when(messageParser.getCategoryVietnameseName(Category.FOOD)).thenReturn("Ăn uống 🍜");
+
+        // Ngân sách 1: Ăn uống chung (vượt ngưỡng 92%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse generalBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        generalBudget.setCategory(Category.FOOD);
+        generalBudget.setAmount(new BigDecimal("5000000"));
+        generalBudget.setSpending(new BigDecimal("4600000"));
+        generalBudget.setUsedPercentage(new BigDecimal("92.0"));
+
+        // Ngân sách 2: Ăn uống gắn thẻ #cafe (chỉ mới 30%)
+        com.example.financial_management.model.budget.BudgetCheckingResponse cafeBudget =
+                new com.example.financial_management.model.budget.BudgetCheckingResponse();
+        cafeBudget.setCategory(Category.FOOD);
+        cafeBudget.setTagName("cafe");
+        cafeBudget.setAmount(new BigDecimal("1000000"));
+        cafeBudget.setSpending(new BigDecimal("300000"));
+        cafeBudget.setUsedPercentage(new BigDecimal("30.0"));
+
+        when(budgetService.checkingBudget(anyInt(), anyInt(), any()))
+                .thenReturn(List.of(generalBudget, cafeBudget));
+
+        commandHandler.handleIncomingMessage(ownerChatId, "40k tra sua #banbe");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(botClient, times(2)).sendMessage(eq(ownerChatId), captor.capture());
+
+        List<String> messages = captor.getAllValues();
+        String alertMsg = messages.get(1);
+        assertTrue(alertMsg.contains("CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!"));
+        assertTrue(alertMsg.contains("Ăn uống 🍜"));
+        assertFalse(alertMsg.contains("Thẻ #cafe"));
+        assertTrue(alertMsg.contains("92.0%"));
     }
 }

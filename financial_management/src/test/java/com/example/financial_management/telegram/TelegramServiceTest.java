@@ -163,4 +163,98 @@ class TelegramServiceTest {
         assertTrue(response.isBudgetAlertEnabled());
         verify(userRepository, times(1)).save(sampleUser);
     }
+
+    @Test
+    @DisplayName("Gửi tổng kết chi tiêu hàng ngày tới người dùng thành công")
+    void testSendDailySummaryToUserSuccess() {
+        sampleUser.setTelegramChatId(123456789L);
+        sampleUser.setTelegramDailyReportEnabled(true);
+
+        com.example.financial_management.entity.Transaction t1 = new com.example.financial_management.entity.Transaction();
+        t1.setType(com.example.financial_management.constant.TransactionType.EXPENSE);
+        t1.setAmount(new java.math.BigDecimal("50000"));
+
+        com.example.financial_management.entity.Transaction t2 = new com.example.financial_management.entity.Transaction();
+        t2.setType(com.example.financial_management.constant.TransactionType.EXPENSE);
+        t2.setAmount(new java.math.BigDecimal("195000"));
+
+        when(transactionRepository.findAllByUserIdAndCreatedAtBetween(eq(userId), any(), any()))
+                .thenReturn(java.util.List.of(t1, t2));
+
+        com.example.financial_management.model.budget.BudgetSummaryResponse budgetSummary =
+                com.example.financial_management.model.budget.BudgetSummaryResponse.builder()
+                        .remainingAmount(new java.math.BigDecimal("4250000"))
+                        .build();
+
+        when(budgetService.getBudgetSummary(anyInt(), anyInt(), any()))
+                .thenReturn(budgetSummary);
+        when(botClient.sendMessage(eq(123456789L), anyString())).thenReturn(true);
+
+        boolean result = telegramService.sendDailySummaryToUser(sampleUser);
+
+        assertTrue(result);
+        org.mockito.ArgumentCaptor<String> captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(botClient).sendMessage(eq(123456789L), captor.capture());
+
+        String sentMsg = captor.getValue();
+        assertTrue(sentMsg.contains("TỔNG KẾT CHI TIÊU HÔM NAY"));
+        assertTrue(sentMsg.contains("245.000 ₫"));
+        assertTrue(sentMsg.contains("2 giao dịch"));
+        assertTrue(sentMsg.contains("4.250.000 ₫"));
+        assertTrue(sentMsg.contains("Chúc bạn một buổi tối thư thái!"));
+    }
+
+    @Test
+    @DisplayName("Không gửi tổng kết chi tiêu nếu người dùng tắt dailyReportEnabled")
+    void testSendDailySummaryToUserDisabledReport() {
+        sampleUser.setTelegramChatId(123456789L);
+        sampleUser.setTelegramDailyReportEnabled(false);
+
+        boolean result = telegramService.sendDailySummaryToUser(sampleUser);
+
+        assertFalse(result);
+        verifyNoInteractions(botClient);
+    }
+
+    @Test
+    @DisplayName("Không gửi tổng kết chi tiêu nếu tài khoản chưa liên kết Chat ID")
+    void testSendDailySummaryToUserNoChatId() {
+        sampleUser.setTelegramChatId(null);
+        sampleUser.setTelegramDailyReportEnabled(true);
+
+        boolean result = telegramService.sendDailySummaryToUser(sampleUser);
+
+        assertFalse(result);
+        verifyNoInteractions(botClient);
+    }
+
+    @Test
+    @DisplayName("Phát sóng tổng kết chi tiêu cho toàn bộ người dùng đủ điều kiện")
+    void testSendDailySummaryToAllUsers() {
+        sampleUser.setTelegramChatId(99887766L);
+        sampleUser.setTelegramDailyReportEnabled(true);
+
+        when(userRepository.findActiveUsersWithDailyReportEnabled(Status.ACTIVE))
+                .thenReturn(java.util.List.of(sampleUser));
+        when(transactionRepository.findAllByUserIdAndCreatedAtBetween(eq(userId), any(), any()))
+                .thenReturn(java.util.Collections.emptyList());
+        when(botClient.sendMessage(eq(99887766L), anyString())).thenReturn(true);
+
+        int sentCount = telegramService.sendDailySummaryToAllUsers();
+
+        assertEquals(1, sentCount);
+        verify(botClient, times(1)).sendMessage(eq(99887766L), anyString());
+    }
+
+    @Test
+    @DisplayName("Không phát sóng tổng kết chi tiêu khi telegram.bot.enabled = false")
+    void testSendDailySummaryToAllUsersWhenBotDisabled() {
+        config.setEnabled(false);
+
+        int sentCount = telegramService.sendDailySummaryToAllUsers();
+
+        assertEquals(0, sentCount);
+        verifyNoInteractions(userRepository);
+        verifyNoInteractions(botClient);
+    }
 }

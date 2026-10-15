@@ -35,6 +35,10 @@ public class TelegramMessageParser {
     private static final Pattern RAW_NUMBER_PATTERN =
             Pattern.compile("(\\b|\\+|-)(\\d+)(\\s*(d|đ|vnd))?\\b", Pattern.CASE_INSENSITIVE);
 
+    // Pattern 4: Thẻ hashtag (ví dụ #di-lai, #cafe, #an-uong, #cong_tac)
+    private static final Pattern HASHTAG_PATTERN =
+            Pattern.compile("#([\\p{L}0-9_-]+)");
+
     public static class ParseAmountResult {
         public BigDecimal amount;
         public String sign; // "+", "-", or null
@@ -156,6 +160,19 @@ public class TelegramMessageParser {
         String remainingText = raw.substring(0, amountResult.startIndex) + " " + raw.substring(amountResult.endIndex);
         remainingText = remainingText.replaceAll("\\s+", " ").trim();
 
+        // 2.1 Bóc tách thẻ hashtag (#tag) nếu có
+        List<String> tags = new ArrayList<>();
+        Matcher hashtagMatcher = HASHTAG_PATTERN.matcher(remainingText);
+        while (hashtagMatcher.find()) {
+            String tag = hashtagMatcher.group(1).trim();
+            if (!tag.isEmpty()) {
+                tags.add(tag);
+            }
+        }
+        if (!tags.isEmpty()) {
+            remainingText = HASHTAG_PATTERN.matcher(remainingText).replaceAll("").replaceAll("\\s+", " ").trim();
+        }
+
         // 3. Xác định loại giao dịch: EXPENSE vs INCOME
         int type = TransactionType.EXPENSE; // mặc định chi tiêu
         String lowerRaw = raw.toLowerCase();
@@ -233,6 +250,7 @@ public class TelegramMessageParser {
                 .accountKeyword(matchedAccountKeyword)
                 .rawAccountKeyword(rawAccountKeyword)
                 .description(description)
+                .tags(tags)
                 .rawInput(raw)
                 .build();
     }

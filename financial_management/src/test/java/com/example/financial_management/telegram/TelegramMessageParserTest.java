@@ -129,4 +129,32 @@ class TelegramMessageParserTest {
         assertEquals("ZaloPay", res.getAccountKeyword());
         assertEquals("Banh mi", res.getDescription());
     }
+
+    @Test
+    @DisplayName("Bóc tách hashtag đơn (ví dụ: xang 70k #di-lai) và loại bỏ hashtag khỏi ghi chú")
+    void testSingleHashtagExtraction() {
+        TelegramParsedTransaction res = parser.parse("xang 70k #di-lai", testAccounts);
+        assertTrue(res.isSuccess());
+        assertEquals(0, new BigDecimal("70000").compareTo(res.getAmount()));
+        assertEquals(Category.TRANSPORT, res.getCategory());
+        assertEquals("Xang", res.getDescription());
+        assertNotNull(res.getTags());
+        assertEquals(1, res.getTags().size());
+        assertEquals("di-lai", res.getTags().get(0));
+    }
+
+    @Test
+    @DisplayName("Bóc tách nhiều hashtag kết hợp chỉ định ví (ví dụ: an toi 150k #banbe #cuoituan vcb)")
+    void testMultipleHashtagsWithWallet() {
+        TelegramParsedTransaction res = parser.parse("an toi 150k #banbe #cuoituan vcb", testAccounts);
+        assertTrue(res.isSuccess());
+        assertEquals(0, new BigDecimal("150000").compareTo(res.getAmount()));
+        assertEquals(Category.FOOD, res.getCategory());
+        assertEquals("Vietcombank", res.getAccountKeyword());
+        assertEquals("An toi", res.getDescription());
+        assertNotNull(res.getTags());
+        assertEquals(2, res.getTags().size());
+        assertTrue(res.getTags().contains("banbe"));
+        assertTrue(res.getTags().contains("cuoituan"));
+    }
 }

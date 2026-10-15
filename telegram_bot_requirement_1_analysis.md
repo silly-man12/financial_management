@@ -2,7 +2,7 @@
 
 > **Tài liệu phân tích kỹ thuật**: Đối soát giữa Lộ trình phát triển (`project_road_map.md` - Phase Q4/2026) và hiện trạng mã nguồn module Telegram Backend (`com.example.financial_management.telegram`).  
 > **Ngày lập**: 11/10/2026  
-> **Trạng thái kết luận**: ⚠️ **Chưa đủ điều kiện hoàn tất** (Đã có Core Engine vững chắc, cần bổ sung 3 API Web, bóc tách `#tag`, Cronjob 21:30 và Cảnh báo ngân sách tức thì).
+> **Trạng thái kết luận**: ✅ **Đủ điều kiện hoàn tất 100% Backend** (Đã hoàn thành Whitelist Guard, 6 API Web, bóc tách hashtag #tag, Cronjob 21:30 và Cảnh báo ngân sách tức thì phân tách theo thẻ và danh mục chung).
 
 ---
 
@@ -47,9 +47,9 @@ Các thành phần đã được triển khai tại package `com.example.financi
 | **2.1** | Ghi chép chi tiêu tự do: `cf 35k` $\rightarrow$ Ăn uống, ví mặc định | Đã hoàn thành trong `TelegramMessageParser` & `TelegramCommandHandler`. | ✅ **ĐẠT** |
 | **2.2** | Chỉ định ví thanh toán: `an toi 150k vcb` | Đã hoàn thành (tự động nhận diện `vcb`, `tcb`, `momo`, `tien mat`...). | ✅ **ĐẠT** |
 | **2.3** | Ghi nhận thu nhập: `luong 30tr vcb` | Đã hoàn thành (nhận diện dấu `+`, từ khóa `luong`, `thu`, `nhan`...). | ✅ **ĐẠT** |
-| **2.4** | Bóc tách thẻ hashtag: `xang 70k #di-lai` | Chưa có regex bóc tách `#tag`, chưa có trường `tags` trong DTO và chưa truyền sang `TransactionRequest`. | ❌ **CHƯA ĐẠT** |
-| **3.1** | Báo cáo chi tiêu tự động 21:30 mỗi tối | Chưa có Cronjob `@Scheduled` nào được thiết lập cho Telegram. | ❌ **CHƯA ĐẠT** |
-| **3.2** | Cảnh báo tức thì khi chi tiêu vượt quá 90% ngân sách | Chưa có logic kiểm tra ngân sách (`BudgetService`) sau khi bot tạo giao dịch. | ❌ **CHƯA ĐẠT** |
+| **2.4** | Bóc tách thẻ hashtag: `xang 70k #di-lai` | Đã triển khai Regex bóc tách hashtag `#([\\p{L}0-9_-]+)`, lưu vào `TransactionRequest.tags` và hiển thị thẻ trong phản hồi của bot. | ✅ **ĐẠT** |
+| **3.1** | Báo cáo chi tiêu tự động 21:30 mỗi tối | Đã tạo `TelegramDailySummaryCronjob` (`@Scheduled(cron = "0 30 21 * * *", zone = "Asia/Ho_Chi_Minh")`), phát sóng báo cáo tổng kết chi tiêu kèm số dư ngân sách tháng còn lại cho toàn bộ người dùng kích hoạt nhận báo cáo. | ✅ **ĐẠT** |
+| **3.2** | Cảnh báo tức thì khi chi tiêu vượt quá 90% ngân sách | Đã tích hợp `BudgetService.checkingBudget` trong `TelegramCommandHandler`: kiểm tra theo đúng thẻ (tag) nếu khoản chi có tag, hoặc tính vào ngân sách chung (trừ các tag riêng) nếu khoản chi không có tag; tự động bắn cảnh báo đỏ khi tiến độ ngân sách đạt $\ge 90\%$ hoặc chạm trần. | ✅ **ĐẠT** |
 
 ---
 
@@ -252,9 +252,9 @@ Có 2 phương án kiến trúc:
 ## 📌 7. Kế Hoạch Triển Khai Đề Xuất (Roadmap Implementation Checklist)
 
 - [x] **Bước 1**: Tạo 1 Bot trên `@BotFather`, lấy API Token và cấu hình danh sách commands. *(Người dùng đã cấu hình bot `@bang_linh_bot`)*
-- [ ] **Bước 2**: Bổ sung Regex bóc tách `#tag` trong `TelegramMessageParser` và map vào `TransactionRequest` $\rightarrow$ Hoàn thành 100% cú pháp Smart Syntax.
+- [x] **Bước 2**: Bổ sung Regex bóc tách `#tag` trong `TelegramMessageParser` và map vào `TransactionRequest` $\rightarrow$ Hoàn thành 100% cú pháp Smart Syntax.
 - [x] **Bước 3**: Thêm các API quản lý kết nối an toàn trên Web (`status`, `generate-link-code`, `unlink`, `settings`, `test-*`), cơ chế mã OTP 6 số và chặn tin nhắn từ Chat ID lạ (Whitelist Guard).
-- [ ] **Bước 4**: Tạo class `TelegramDailySummaryCronjob` gửi báo cáo 21:30 hàng ngày.
-- [ ] **Bước 5**: Tích hợp kiểm tra `usedPercentage >= 90%` trong `TelegramCommandHandler` để bắn cảnh báo tức thì.
+- [x] **Bước 4**: Tạo class `TelegramDailySummaryCronjob` gửi báo cáo 21:30 hàng ngày.
+- [x] **Bước 5**: Tích hợp kiểm tra `usedPercentage >= 90%` trong `TelegramCommandHandler` để bắn cảnh báo tức thì.
 - [ ] **Bước 6**: Cập nhật giao diện Vue 3 trên trang Profile để người dùng lấy mã liên kết OTP và cấu hình thông báo.
 

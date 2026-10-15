@@ -133,10 +133,15 @@ flowchart TD
   - API trả về KPI (Tổng thu, tổng chi, net savings, savings rate %, quy đổi USD).
   - API chuỗi điểm dữ liệu biểu đồ xu hướng dòng tiền theo ngày (`chartPoints`).
   - Xuất báo cáo PDF tháng/năm qua iText.
-- [x] **Telegram Bot Long Polling**:
+- [x] **Telegram Bot Long Polling & Trợ lý tài chính 24/7**:
   - Tự động lắng nghe cập nhật qua Java 21 `HttpClient` Long Polling không cần mở port modem.
   - Bộ bóc tách NLP tiếng Việt thông minh cho số tiền lẻ, danh mục và tên ví.
-  - Các lệnh tra cứu nhanh: `/sodu`, `/homnay`, `/thangnay`, `/undo`.
+  - Bóc tách thẻ hashtag `#tag` (Smart Syntax: `xang 70k #di-lai`, `cf 35k #cafe`, `an toi 150k #tiec-tung`).
+  - Whitelist Guard bảo mật tài khoản cá nhân, cơ chế mã liên kết OTP 6 số và deep link.
+  - Hệ thống 6 API quản lý trên Web (`/status`, `/generate-link-code`, `/unlink`, `/settings`, `/test-daily-summary`, `/test-budget-alert`).
+  - Tự động gửi báo cáo tổng kết chi tiêu lúc 21:30 hàng ngày (`TelegramDailySummaryCronjob`).
+  - Cảnh báo tức thì khi chi tiêu vượt $\ge 90\%$ ngân sách (tự động phân tách thẻ tag và danh mục chung).
+  - Các lệnh tra cứu nhanh: `/sodu`, `/homnay`, `/thangnay`, `/vi`, `/huy`, `/link`, `/unlink`, `/help`.
 
 ---
 
@@ -213,9 +218,9 @@ sequenceDiagram
   - Endpoint `POST /transactions/scan-receipt`: Tiếp nhận file ảnh hóa đơn $\rightarrow$ Gửi lên Gemini kèm structured prompt (JSON Schema) $\rightarrow$ Trả về JSON chuẩn hóa: `{ amount: 154000, date: "2026-10-08", merchant: "WinMart", suggestedCategory: 1, note: "Mua thuc pham" }`.
 - [ ] **Tích hợp Nhận Diện Giọng Nói (Speech-to-Text Service)**:
   - Telegram bot nhận file tin nhắn thoại `.oga` $\rightarrow$ Backend chuyển đổi sang text qua OpenAI Whisper hoặc Gemini Audio $\rightarrow$ Chuyển văn bản qua `TelegramMessageParser` để tự động tạo giao dịch.
-- [ ] **Cronjob Thông Báo & Cảnh Báo Tài Chính Cá Nhân**:
-  - Tác vụ định kỳ quét lúc `21:30` mỗi tối: Tổng hợp thu chi trong ngày và gửi bản tin tóm tắt qua Bot Telegram.
-  - Cảnh báo tự động gửi qua Telegram ngay khi một danh mục chi tiêu vượt quá $90\%$ ngân sách đã đề ra.
+- [x] **Cronjob Thông Báo & Cảnh Báo Tài Chính Cá Nhân (Đã hoàn thành trước tiến độ ở Q4/2026)**:
+  - Tác vụ định kỳ quét lúc `21:30` mỗi tối (`TelegramDailySummaryCronjob`): Tổng hợp thu chi trong ngày, số lượng giao dịch và số dư ngân sách tháng còn lại gửi qua Bot Telegram.
+  - Cảnh báo tự động gửi qua Telegram ngay khi một khoản chi khiến ngân sách danh mục hoặc thẻ tag vượt quá $90\%$ (và báo động đỏ khi vượt $100\%$).
 
 ---
 
@@ -276,7 +281,7 @@ sequenceDiagram
 
 | Phiên Bản | Mốc Thời Gian | Trọng Tâm Bàn Giao Backend |
 |---|:---:|---|
-| **v1.0.0** *(Hiện tại)* | 10/2026 | **Hoàn thành Core Backend**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot long polling. |
+| **v1.0.0** *(Hiện tại)* | 10/2026 | **Hoàn thành Core Backend & Telegram Assistant**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot toàn năng (bóc tách #tag, báo cáo 21:30, cảnh báo ngân sách $\ge 90\%$, OTP linking, Whitelist Guard). |
 | **v1.1.0** | 11/2026 | **Tối ưu kết nối Vue Client**: Hoàn thiện CORS `5173`, chuẩn hóa Global Error Handler, API ảnh hóa đơn tĩnh, đồng bộ API contract. |
 | **v2.0.0** | 04/2027 | **Tự động hóa & AI Engine**: Endpoint Bank Webhook (SePay/Casso), Gemini Flash Vision OCR đọc hóa đơn, Speech-to-Text tin nhắn thoại. |
 | **v2.5.0** | 08/2027 | **Net Worth & Investment APIs**: Entity & API quản lý Vàng, Sổ tiết kiệm kỳ hạn, Lãi suất, Crawl giá thị trường, Biểu đồ Net Worth. |

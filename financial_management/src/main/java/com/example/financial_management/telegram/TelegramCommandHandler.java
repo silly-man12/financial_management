@@ -7,10 +7,12 @@ import com.example.financial_management.entity.Account;
 import com.example.financial_management.entity.Transaction;
 import com.example.financial_management.entity.User;
 import com.example.financial_management.model.auth.Auth;
+import com.example.financial_management.model.budget.BudgetCheckingResponse;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.repository.AccountRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
+import com.example.financial_management.services.BudgetService;
 import com.example.financial_management.services.TransactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,7 @@ public class TelegramCommandHandler {
     private final TransactionRepository transactionRepository;
     private final TransactionService transactionService;
     private final TelegramService telegramService;
+    private final BudgetService budgetService;
 
     private static final Locale VI_LOCALE = Locale.of("vi", "VN");
 
@@ -521,6 +524,9 @@ public class TelegramCommandHandler {
         request.setDescription(parsed.getDescription());
         request.setHaveImage(false);
         request.setCreateAt(LocalDateTime.now());
+        if (parsed.getTags() != null && !parsed.getTags().isEmpty()) {
+            request.setTags(parsed.getTags());
+        }
 
         Auth auth = new Auth();
         auth.setId(user.getId().toString());
@@ -539,9 +545,14 @@ public class TelegramCommandHandler {
                     : "🔴 <b>ĐÃ THÊM CHI TIÊU</b>";
             String sign = parsed.getType() == TransactionType.INCOME ? "+" : "-";
 
+            String tagDisplay = "";
+            if (parsed.getTags() != null && !parsed.getTags().isEmpty()) {
+                tagDisplay = "\n🏷️ Thẻ: " + parsed.getTags().stream().map(t -> "#" + t).reduce((a, b) -> a + " " + b).orElse("");
+            }
+
             String responseMsg = icon + "\n\n" +
                     "💵 Số tiền: <b>" + sign + formatMoney(parsed.getAmount()) + "</b>\n" +
-                    "🏷️ Danh mục: <b>" + parsed.getCategoryName() + "</b>\n" +
+                    "🏷️ Danh mục: <b>" + parsed.getCategoryName() + "</b>" + tagDisplay + "\n" +
                     "📝 Ghi chú: <i>" + parsed.getDescription() + "</i>\n" +
                     "🏦 Ví: <b>" + targetAccount.getName() + "</b>\n" +
                     "💰 Số dư ví còn lại: <code>" + formatMoney(updatedAcc.getBalance()) + "</code>\n\n" +
@@ -549,9 +560,155 @@ public class TelegramCommandHandler {
 
             botClient.sendMessage(chatId, responseMsg);
 
+            // Cảnh báo ngân sách tức thì nếu chi tiêu khiến ngân sách danh mục hoặc thẻ vượt quá 90%
+            if (parsed.getType() == TransactionType.EXPENSE && user.isTelegramBudgetAlertEnabled()) {
+                checkAndSendBudgetAlert(chatId, user, parsed, auth);
+            }
+
         } catch (Exception e) {
             log.error("[TelegramBot] Error creating transaction: {}", e.getMessage(), e);
             botClient.sendMessage(chatId, "❌ Lỗi khi lưu giao dịch: " + e.getMessage());
         }
+    }
+
+    /**
+     * Kiểm tra và gửi cảnh báo đỏ tức thì nếu chi tiêu danh mục/thẻ chạm trần hoặc vượt quá 90% hạn mức.
+     * Quy tắc phân bổ ngân sách:
+     * - Nếu giao dịch có tag và khớp với ngân sách có tag tương ứng trong cùng category, cảnh báo theo ngân sách tag đó.
+     * - Nếu giao dịch không có tag (hoặc tag không khớp với ngân sách có tag nào), giao dịch sẽ thuộc ngân sách chung
+     *   (ngân sách không có tag) của category đó (ngân sách chung = tổng category trừ đi các tag của ngân sách riêng).
+     */
+    private void checkAndSendBudgetAlert(long chatId, User user, TelegramParsedTransaction parsed, Auth auth) {
+        try {
+            LocalDate now = LocalDate.now();
+            List<BudgetCheckingResponse> budgets = budgetService.checkingBudget(now.getMonthValue(), now.getYear(), auth);
+            if (budgets == null || budgets.isEmpty()) {
+                return;
+            }
+
+            // 1. Lọc tất cả các ngân sách cùng category với giao dịch vừa tạo
+            List<BudgetCheckingResponse> categoryBudgets = new ArrayList<>();
+            for (BudgetCheckingResponse b : budgets) {
+                if (b.getCategory() == parsed.getCategory()) {
+                    categoryBudgets.add(b);
+                }
+            }
+
+            if (categoryBudgets.isEmpty()) {
+                return;
+            }
+
+            // 2. Phân loại ngân sách có tag và ngân sách chung không tag
+            List<BudgetCheckingResponse> taggedBudgets = new ArrayList<>();
+            List<BudgetCheckingResponse> generalBudgets = new ArrayList<>();
+
+            for (BudgetCheckingResponse b : categoryBudgets) {
+                boolean hasTags = (b.getTagId() != null)
+                        || (b.getTagName() != null && !b.getTagName().isBlank())
+                        || (b.getTags() != null && !b.getTags().isEmpty());
+
+                if (hasTags) {
+                    taggedBudgets.add(b);
+                } else {
+                    generalBudgets.add(b);
+                }
+            }
+
+            // 3. Xác định ngân sách nào bị ảnh hưởng trực tiếp bởi giao dịch này
+            List<String> transTags = (parsed.getTags() != null) ? parsed.getTags() : Collections.emptyList();
+            List<BudgetCheckingResponse> affectedBudgets = new ArrayList<>();
+
+            // Kiểm tra xem khoản chi gắn tag này đã có ngân sách nào gắn tag đấy hay chưa
+            for (BudgetCheckingResponse tb : taggedBudgets) {
+                if (matchesBudgetTag(tb, transTags)) {
+                    affectedBudgets.add(tb);
+                }
+            }
+
+            // Quy tắc hạch toán ngân sách:
+            // - Nếu giao dịch KHÔNG gắn tag, hoặc CÓ gắn tag nhưng CHƯA có ngân sách nào gắn tag đấy:
+            //   Khoản chi được hạch toán vào ngân sách chung của category đó.
+            // - Nếu ĐÃ CÓ ngân sách gắn tag đấy: Khoản chi đã được thêm vào affectedBudgets (ngân sách thẻ đó),
+            //   đồng thời ngân sách chung trong BudgetService đã tự động trừ đi chi tiêu của tag đấy.
+            if (affectedBudgets.isEmpty()) {
+                affectedBudgets.addAll(generalBudgets);
+            }
+
+            // 4. Kiểm tra cảnh báo vượt hạn mức (>= 90%) cho các ngân sách bị ảnh hưởng
+            for (BudgetCheckingResponse targetBudget : affectedBudgets) {
+                if (targetBudget.getUsedPercentage() != null
+                        && targetBudget.getUsedPercentage().compareTo(BigDecimal.valueOf(90)) >= 0) {
+
+                    String catBaseName = messageParser.getCategoryVietnameseName(targetBudget.getCategory());
+                    if (catBaseName == null || catBaseName.isBlank()) {
+                        catBaseName = "Danh mục #" + targetBudget.getCategory();
+                    }
+
+                    boolean isTagged = (targetBudget.getTagName() != null && !targetBudget.getTagName().isBlank())
+                            || (targetBudget.getTags() != null && !targetBudget.getTags().isEmpty());
+
+                    String displayName;
+                    if (isTagged) {
+                        String rawTagName = targetBudget.getTagName() != null ? targetBudget.getTagName()
+                                : (targetBudget.getTags() != null && !targetBudget.getTags().isEmpty()
+                                        ? targetBudget.getTags().get(0).getName() : "");
+                        displayName = catBaseName + " (Thẻ #" + cleanTag(rawTagName) + ")";
+                    } else {
+                        displayName = catBaseName;
+                    }
+
+                    String warningLine = targetBudget.getUsedPercentage().compareTo(BigDecimal.valueOf(100)) >= 0
+                            ? "⚠️ <b>Bạn đã vượt quá hạn mức ngân sách cho tháng này!</b>"
+                            : "⚠️ Bạn sắp chạm trần ngân sách cho tháng này!";
+
+                    String alertMsg = "🚨 <b>CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!</b>\n\n" +
+                            "Danh mục: <b>" + displayName + "</b>\n" +
+                            "Tiến độ hiện tại: <b>" + String.format(Locale.US, "%.1f%%", targetBudget.getUsedPercentage().doubleValue()) + "</b> " +
+                            "(Đã chi " + formatMoney(targetBudget.getSpending()) + " / Hạn mức " + formatMoney(targetBudget.getAmount()) + ")\n" +
+                            warningLine;
+
+                    botClient.sendMessage(chatId, alertMsg);
+                    log.info("[TelegramBot] Triggered budget alert for user {} - {}: {}%",
+                            user.getEmail(), displayName, targetBudget.getUsedPercentage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[TelegramBot] Error checking budget alert for user {}: {}", user.getEmail(), e.getMessage());
+        }
+    }
+
+    private String cleanTag(String tag) {
+        if (tag == null) return "";
+        return tag.trim().replaceFirst("^#+", "").trim();
+    }
+
+    private boolean matchesBudgetTag(BudgetCheckingResponse b, List<String> transTags) {
+        if (transTags == null || transTags.isEmpty()) {
+            return false;
+        }
+
+        if (b.getTagName() != null && !b.getTagName().isBlank()) {
+            String cleanBudgetTag = cleanTag(b.getTagName());
+            for (String tag : transTags) {
+                if (cleanBudgetTag.equalsIgnoreCase(cleanTag(tag))) {
+                    return true;
+                }
+            }
+        }
+
+        if (b.getTags() != null) {
+            for (com.example.financial_management.model.tag.TagResponse tr : b.getTags()) {
+                if (tr != null && tr.getName() != null && !tr.getName().isBlank()) {
+                    String cleanBudgetTag = cleanTag(tr.getName());
+                    for (String tag : transTags) {
+                        if (cleanBudgetTag.equalsIgnoreCase(cleanTag(tag))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }

@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -18,4 +19,6 @@ public class TelegramParsedTransaction {
     private String description;
     private String errorMessage;
     private String rawInput;
+    private List<String> tags;
 }
+
