@@ -7,10 +7,13 @@ import com.example.financial_management.entity.Account;
 import com.example.financial_management.entity.Transaction;
 import com.example.financial_management.entity.User;
 import com.example.financial_management.model.auth.Auth;
+import com.example.financial_management.model.budget.BudgetCheckingResponse;
 import com.example.financial_management.model.transaction.TransactionRequest;
 import com.example.financial_management.repository.AccountRepository;
+import com.example.financial_management.repository.TagRepository;
 import com.example.financial_management.repository.TransactionRepository;
 import com.example.financial_management.repository.UserRepository;
+import com.example.financial_management.services.BudgetService;
 import com.example.financial_management.services.TransactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +40,8 @@ public class TelegramCommandHandler {
     private final TransactionRepository transactionRepository;
     private final TransactionService transactionService;
     private final TelegramService telegramService;
+    private final BudgetService budgetService;
+    private final TagRepository tagRepository;
 
     private static final Locale VI_LOCALE = Locale.of("vi", "VN");
 
@@ -521,6 +526,9 @@ public class TelegramCommandHandler {
         request.setDescription(parsed.getDescription());
         request.setHaveImage(false);
         request.setCreateAt(LocalDateTime.now());
+        if (parsed.getTags() != null && !parsed.getTags().isEmpty()) {
+            request.setTags(parsed.getTags());
+        }
 
         Auth auth = new Auth();
         auth.setId(user.getId().toString());
@@ -539,19 +547,213 @@ public class TelegramCommandHandler {
                     : "🔴 <b>ĐÃ THÊM CHI TIÊU</b>";
             String sign = parsed.getType() == TransactionType.INCOME ? "+" : "-";
 
+            String tagDisplay = "";
+            if (parsed.getTags() != null && !parsed.getTags().isEmpty()) {
+                tagDisplay = "\n🏷️ Thẻ: " + parsed.getTags().stream().map(t -> "#" + t).reduce((a, b) -> a + " " + b).orElse("");
+            }
+
+            // Xét ngân sách bị ảnh hưởng (ngân sách gắn thẻ hoặc ngân sách chung)
+            String budgetStatusInfo = "";
+            List<BudgetCheckingResponse> affectedBudgets = Collections.emptyList();
+            boolean hasTags = parsed.getTags() != null && !parsed.getTags().isEmpty();
+            if (parsed.getType() == TransactionType.EXPENSE && (hasTags || user.isTelegramBudgetAlertEnabled())) {
+                affectedBudgets = findAffectedBudgets(user, parsed, auth);
+                if (!affectedBudgets.isEmpty()) {
+                    BudgetCheckingResponse primaryBudget = affectedBudgets.get(0);
+                    if (primaryBudget.getAmount() != null && primaryBudget.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal spending = primaryBudget.getSpending() != null ? primaryBudget.getSpending() : BigDecimal.ZERO;
+                        BigDecimal remaining = primaryBudget.getAmount().subtract(spending);
+                        BigDecimal pct = primaryBudget.getUsedPercentage() != null ? primaryBudget.getUsedPercentage() : BigDecimal.ZERO;
+                        String budgetDisplayName = getBudgetDisplayName(primaryBudget);
+
+                        if (remaining.compareTo(BigDecimal.ZERO) >= 0) {
+                            budgetStatusInfo = "\n📊 Ngân sách " + budgetDisplayName + ": Còn lại <code>" + formatMoney(remaining) + "</code> (chiếm " + String.format(Locale.US, "%.1f%%", pct.doubleValue()) + ")";
+                        } else {
+                            budgetStatusInfo = "\n📊 Ngân sách " + budgetDisplayName + ": Đã vượt <code>" + formatMoney(remaining.abs()) + "</code> (chiếm " + String.format(Locale.US, "%.1f%%", pct.doubleValue()) + ")";
+                        }
+                    }
+                }
+            }
+
             String responseMsg = icon + "\n\n" +
                     "💵 Số tiền: <b>" + sign + formatMoney(parsed.getAmount()) + "</b>\n" +
-                    "🏷️ Danh mục: <b>" + parsed.getCategoryName() + "</b>\n" +
+                    "🏷️ Danh mục: <b>" + parsed.getCategoryName() + "</b>" + tagDisplay + "\n" +
                     "📝 Ghi chú: <i>" + parsed.getDescription() + "</i>\n" +
                     "🏦 Ví: <b>" + targetAccount.getName() + "</b>\n" +
-                    "💰 Số dư ví còn lại: <code>" + formatMoney(updatedAcc.getBalance()) + "</code>\n\n" +
+                    "💰 Số dư ví còn lại: <code>" + formatMoney(updatedAcc.getBalance()) + "</code>" +
+                    budgetStatusInfo + "\n\n" +
                     "<i>Gõ /huy nếu bạn muốn hủy giao dịch này.</i>";
 
             botClient.sendMessage(chatId, responseMsg);
+
+            // Cảnh báo ngân sách tức thì nếu chi tiêu khiến ngân sách danh mục hoặc thẻ vượt quá 90%
+            if (parsed.getType() == TransactionType.EXPENSE && user.isTelegramBudgetAlertEnabled()) {
+                sendBudgetAlertsIfNeeded(chatId, user, affectedBudgets);
+            }
 
         } catch (Exception e) {
             log.error("[TelegramBot] Error creating transaction: {}", e.getMessage(), e);
             botClient.sendMessage(chatId, "❌ Lỗi khi lưu giao dịch: " + e.getMessage());
         }
+    }
+
+    /**
+     * Xác định danh sách ngân sách bị ảnh hưởng trực tiếp bởi giao dịch:
+     * - Nếu giao dịch CÓ tag và ĐÃ CÓ ngân sách gắn tag đó: hạch toán và kiểm tra ngân sách của tag đó.
+     * - Nếu giao dịch KHÔNG gắn tag, hoặc CÓ tag nhưng CHƯA CÓ ngân sách nào gắn tag đó:
+     *   hạch toán vào ngân sách chung của category đó (ngân sách không có tag, tự động trừ các tag có ngân sách riêng).
+     */
+    private List<BudgetCheckingResponse> findAffectedBudgets(User user, TelegramParsedTransaction parsed, Auth auth) {
+        try {
+            LocalDate now = LocalDate.now();
+            List<BudgetCheckingResponse> budgets = budgetService.checkingBudget(now.getMonthValue(), now.getYear(), auth);
+            if (budgets == null || budgets.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            List<String> transTags = (parsed.getTags() != null) ? parsed.getTags() : Collections.emptyList();
+            List<BudgetCheckingResponse> matchedTaggedBudgets = new ArrayList<>();
+            List<BudgetCheckingResponse> generalBudgets = new ArrayList<>();
+
+            for (BudgetCheckingResponse b : budgets) {
+                boolean hasTags = (b.getTagId() != null)
+                        || (b.getTagName() != null && !b.getTagName().isBlank())
+                        || (b.getTags() != null && !b.getTags().isEmpty());
+
+                if (hasTags) {
+                    if (matchesBudgetTag(b, transTags, user.getId())) {
+                        matchedTaggedBudgets.add(b);
+                    }
+                } else if (b.getCategory() == parsed.getCategory()) {
+                    generalBudgets.add(b);
+                }
+            }
+
+            if (!matchedTaggedBudgets.isEmpty()) {
+                return matchedTaggedBudgets;
+            } else {
+                return generalBudgets;
+            }
+        } catch (Exception e) {
+            log.warn("[TelegramBot] Error checking affected budgets for user {}: {}", user.getEmail(), e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Gửi tin nhắn cảnh báo đỏ tức thì nếu ngân sách bị ảnh hưởng đạt >= 90% hạn mức.
+     */
+    private void sendBudgetAlertsIfNeeded(long chatId, User user, List<BudgetCheckingResponse> affectedBudgets) {
+        if (affectedBudgets == null || affectedBudgets.isEmpty()) {
+            return;
+        }
+
+        for (BudgetCheckingResponse targetBudget : affectedBudgets) {
+            if (targetBudget.getUsedPercentage() != null
+                    && targetBudget.getUsedPercentage().compareTo(BigDecimal.valueOf(90)) >= 0) {
+
+                String displayName = getBudgetDisplayName(targetBudget);
+                BigDecimal spending = targetBudget.getSpending() != null ? targetBudget.getSpending() : BigDecimal.ZERO;
+                BigDecimal amount = targetBudget.getAmount() != null ? targetBudget.getAmount() : BigDecimal.ZERO;
+                BigDecimal remaining = amount.subtract(spending);
+                double pct = targetBudget.getUsedPercentage().doubleValue();
+
+                boolean isOver = targetBudget.getUsedPercentage().compareTo(BigDecimal.valueOf(100)) >= 0;
+                String header = isOver
+                        ? "🚨 <b>BÁO ĐỘNG ĐỎ VƯỢT HẠN MỨC NGÂN SÁCH!</b>"
+                        : "🚨 <b>CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!</b>";
+
+                String remainingLine;
+                if (remaining.compareTo(BigDecimal.ZERO) >= 0) {
+                    remainingLine = "💰 Số tiền còn lại: <code>" + formatMoney(remaining) + "</code>\n\n" +
+                            "⚠️ Bạn sắp chạm trần ngân sách cho tháng này!";
+                } else {
+                    remainingLine = "⚠️ Đã vượt hạn mức: <code>" + formatMoney(remaining.abs()) + "</code>\n\n" +
+                            "🚨 <b>Bạn đã vượt quá hạn mức ngân sách cho tháng này!</b>";
+                }
+
+                String alertMsg = header + "\n\n" +
+                        "Danh mục: <b>" + displayName + "</b>\n" +
+                        "📊 Chiếm ngân sách: <b>" + String.format(Locale.US, "%.1f%%", pct) + "</b>\n" +
+                        "💵 Đã chi: <b>" + formatMoney(spending) + "</b> / Hạn mức: <b>" + formatMoney(amount) + "</b>\n" +
+                        remainingLine;
+
+                botClient.sendMessage(chatId, alertMsg);
+                log.info("[TelegramBot] Triggered budget alert for user {} - {}: {}% (remaining: {})",
+                        user.getEmail(), displayName, targetBudget.getUsedPercentage(), remaining);
+            }
+        }
+    }
+
+    private void checkAndSendBudgetAlert(long chatId, User user, TelegramParsedTransaction parsed, Auth auth) {
+        List<BudgetCheckingResponse> affectedBudgets = findAffectedBudgets(user, parsed, auth);
+        sendBudgetAlertsIfNeeded(chatId, user, affectedBudgets);
+    }
+
+    private String getBudgetDisplayName(BudgetCheckingResponse targetBudget) {
+        String catBaseName = messageParser.getCategoryVietnameseName(targetBudget.getCategory());
+        if (catBaseName == null || catBaseName.isBlank()) {
+            catBaseName = "Danh mục #" + targetBudget.getCategory();
+        }
+
+        boolean isTagged = (targetBudget.getTagName() != null && !targetBudget.getTagName().isBlank())
+                || (targetBudget.getTags() != null && !targetBudget.getTags().isEmpty());
+
+        if (isTagged) {
+            String rawTagName = targetBudget.getTagName() != null ? targetBudget.getTagName()
+                    : (targetBudget.getTags() != null && !targetBudget.getTags().isEmpty()
+                            ? targetBudget.getTags().get(0).getName() : "");
+            return catBaseName + " (Thẻ #" + cleanTag(rawTagName) + ")";
+        }
+        return catBaseName;
+    }
+
+    private String cleanTag(String tag) {
+        if (tag == null) return "";
+        return tag.trim().replaceFirst("^#+", "").trim();
+    }
+
+    private boolean matchesBudgetTag(BudgetCheckingResponse b, List<String> transTags, UUID userId) {
+        if (transTags == null || transTags.isEmpty()) {
+            return false;
+        }
+
+        if (b.getTagName() != null && !b.getTagName().isBlank()) {
+            String cleanBudgetTag = cleanTag(b.getTagName());
+            for (String tag : transTags) {
+                if (cleanBudgetTag.equalsIgnoreCase(cleanTag(tag))) {
+                    return true;
+                }
+            }
+        }
+
+        if (b.getTags() != null) {
+            for (com.example.financial_management.model.tag.TagResponse tr : b.getTags()) {
+                if (tr != null && tr.getName() != null && !tr.getName().isBlank()) {
+                    String cleanBudgetTag = cleanTag(tr.getName());
+                    for (String tag : transTags) {
+                        if (cleanBudgetTag.equalsIgnoreCase(cleanTag(tag))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (b.getTagId() != null && tagRepository != null && userId != null) {
+            try {
+                List<com.example.financial_management.entity.Tag> userTags =
+                        tagRepository.findAllByUserIdAndNameIn(userId, transTags);
+                for (com.example.financial_management.entity.Tag ut : userTags) {
+                    if (ut != null && b.getTagId().equals(ut.getId())) {
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Error matching tag by id: {}", e.getMessage());
+            }
+        }
+
+        return false;
     }
 }

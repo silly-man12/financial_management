@@ -230,16 +230,9 @@ public class TelegramService {
     }
 
     /**
-     * Gửi tin nhắn tổng kết chi tiêu thử nghiệm về Telegram của user
+     * Tạo nội dung tin nhắn tổng kết chi tiêu hàng ngày (dùng chung cho Cronjob và Thử nghiệm)
      */
-    public void sendTestDailySummary(Auth auth) {
-        User user = userRepository.findByIdAndStatus(auth.getUUID(), Status.ACTIVE)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông tin người dùng"));
-
-        if (user.getTelegramChatId() == null) {
-            throw new IllegalArgumentException("Tài khoản chưa được liên kết với Telegram Bot. Vui lòng liên kết trước!");
-        }
-
+    public String buildDailySummaryMessage(User user, boolean isTest) {
         LocalDate today = LocalDate.now();
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(23, 59, 59);
@@ -256,6 +249,13 @@ public class TelegramService {
             }
         }
 
+        Auth auth = new Auth();
+        auth.setId(user.getId().toString());
+        auth.setName(user.getName());
+        auth.setEmail(user.getEmail());
+        auth.setRole(user.getRole());
+        auth.setStatus(user.getStatus());
+
         String budgetRemainingStr = "Chưa thiết lập";
         try {
             BudgetSummaryResponse summary = budgetService.getBudgetSummary(today.getMonthValue(), today.getYear(), auth);
@@ -263,7 +263,7 @@ public class TelegramService {
                 budgetRemainingStr = formatMoney(summary.getRemainingAmount());
             }
         } catch (Exception e) {
-            log.warn("[TelegramTest] Could not fetch budget summary: {}", e.getMessage());
+            log.warn("[TelegramDailySummary] Could not fetch budget summary for user {}: {}", user.getEmail(), e.getMessage());
         }
 
         String expenseDisplay = expenseCount > 0
@@ -271,11 +271,70 @@ public class TelegramService {
                 : "<b>0 ₫</b> (Hôm nay chưa có chi tiêu)";
 
         String dateStr = today.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        String message =
-                "🌙 <b>TỔNG KẾT CHI TIÊU HÔM NAY (" + dateStr + ") [THỬ NGHIỆM]</b>\n\n" +
+        String testSuffix = isTest ? " [THỬ NGHIỆM]" : "";
+
+        return "🌙 <b>TỔNG KẾT CHI TIÊU HÔM NAY (" + dateStr + ")" + testSuffix + "</b>\n\n" +
                 "💸 Hôm nay bạn đã chi: " + expenseDisplay + "\n" +
                 "📊 Ngân sách tháng còn lại: <b>" + budgetRemainingStr + "</b>\n\n" +
-                "<i>Chúc bạn một buổi tối thư thái và an lành! ✨</i>";
+                "<i>Chúc bạn một buổi tối thư thái! ✨</i>";
+    }
+
+    /**
+     * Gửi tin nhắn tổng kết chi tiêu hàng ngày tới một người dùng cụ thể
+     */
+    public boolean sendDailySummaryToUser(User user) {
+        if (user == null || user.getTelegramChatId() == null || !user.isTelegramDailyReportEnabled()) {
+            return false;
+        }
+
+        String message = buildDailySummaryMessage(user, false);
+        boolean sent = botClient.sendMessage(user.getTelegramChatId(), message);
+        if (sent) {
+            log.info("[TelegramDailySummary] Successfully sent daily summary to user {} (chatId: {})", user.getEmail(), user.getTelegramChatId());
+        } else {
+            log.warn("[TelegramDailySummary] Failed to send daily summary to user {} (chatId: {})", user.getEmail(), user.getTelegramChatId());
+        }
+        return sent;
+    }
+
+    /**
+     * Gửi tin nhắn tổng kết chi tiêu hàng ngày cho toàn bộ người dùng đủ điều kiện (21:30 hàng ngày)
+     */
+    public int sendDailySummaryToAllUsers() {
+        if (!config.isEnabled()) {
+            log.info("[TelegramDailySummary] Telegram bot is disabled. Skipping daily summary cronjob.");
+            return 0;
+        }
+
+        List<User> activeUsers = userRepository.findActiveUsersWithDailyReportEnabled(Status.ACTIVE);
+        log.info("[TelegramDailySummary] Starting daily summary broadcast to {} active user(s)...", activeUsers.size());
+
+        int successCount = 0;
+        for (User user : activeUsers) {
+            try {
+                if (sendDailySummaryToUser(user)) {
+                    successCount++;
+                }
+            } catch (Exception e) {
+                log.error("[TelegramDailySummary] Error sending summary to user {}: {}", user.getEmail(), e.getMessage(), e);
+            }
+        }
+        log.info("[TelegramDailySummary] Finished daily summary broadcast: {}/{} users succeeded.", successCount, activeUsers.size());
+        return successCount;
+    }
+
+    /**
+     * Gửi tin nhắn tổng kết chi tiêu thử nghiệm về Telegram của user
+     */
+    public void sendTestDailySummary(Auth auth) {
+        User user = userRepository.findByIdAndStatus(auth.getUUID(), Status.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông tin người dùng"));
+
+        if (user.getTelegramChatId() == null) {
+            throw new IllegalArgumentException("Tài khoản chưa được liên kết với Telegram Bot. Vui lòng liên kết trước!");
+        }
+
+        String message = buildDailySummaryMessage(user, true);
 
         boolean sent = botClient.sendMessage(user.getTelegramChatId(), message);
         if (!sent) {
