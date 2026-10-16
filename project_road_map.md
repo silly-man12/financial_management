@@ -183,6 +183,26 @@ flowchart TD
 - [x] Endpoint tĩnh phục vụ file ảnh hóa đơn: Cấu hình Spring Boot `ResourceHandler` để Vue App có thể hiển thị ảnh hóa đơn qua URL trực tiếp `http://localhost:8080/images/{filename}`, kèm trường `imageUrl` đầy đủ trong `TransactionResponse`.
 - [x] Hệ thống kiểm thử tự động (Unit Tests) bao phủ Exception Handling, Jackson Config, AuthFilter, Cors, ResourceHandler, AbstractResponse và Dashboard API với tỷ lệ đạt 100%.
 
+#### 4. Dự Báo Dòng Tiền Cá Nhân (Personal Cashflow Forecast):
+- [x] **`GET /cashflow/forecast?targetMonth=MM/yyyy` (Cashflow Forecasting Engine)**:
+  - Dự báo tài chính thông minh cho tháng hiện tại hoặc bất kỳ tháng nào trong tương lai.
+  - **`actualSoFar`**: Bóc tách thu/chi thực tế từ đầu tháng đến ngày hiện tại.
+  - **`recurringScheduled`**: Liệt kê các khoản thu/chi định kỳ (`RecurringTransaction`) còn lại trong tháng chưa chạy kèm ngày đến hạn và số tiền.
+  - **`forecast`**: Tính toán doanh thu dự phóng (`projectedIncome`), tổng chi dự kiến (`projectedExpense`), dòng tiền ròng (`projectedNet`) và số dư dự kiến cuối tháng (`projectedEndBalance`).
+  - **`safeToSpend`**: Tính toán số tiền an toàn được tiêu mỗi ngày (`dailySafeSpend`), mỗi tuần (`weeklySafeSpend`) và cả tháng còn lại, kèm 4 cấp độ cảnh báo (`SAFE`, `MODERATE`, `DANGER`, `CRITICAL`) và khuyến nghị tài chính thông minh (`advice`).
+  - **`budgetComparison`**: Tự động so sánh chi tiêu dự kiến với hạn mức ngân sách tháng đã lập để phát hiện nguy cơ vỡ ngân sách từ sớm.
+
+#### 5. Sao Lưu & Khôi Phục Dữ Liệu 1-Click (1-Click Full Backup & Restore):
+- [x] **`POST /backup/export?includeImages={true|false}`**:
+  - Xuất toàn bộ 11 bảng dữ liệu cá nhân (`accounts`, `tags`, `transactions`, `transaction_tags`, `recurring_transactions`, `budgets`, `budget_tags`, `saving_goals`, `saving_goal_contributions`, `debts`, `debt_payments`) thành 1 file JSON chuẩn UTF-8, định dạng `backup_{userId}_{yyyy-MM-ddTHH-mm}.json`.
+- [x] **`POST /backup/validate` (Multipart File)**:
+  - Kiểm tra tính toàn vẹn của file backup trước khi khôi phục: Kiểm tra JSON cú pháp, so khớp `schemaVersion: 1.0`, đếm số lượng bản ghi của từng bảng và xác thực email người dùng.
+- [x] **`POST /backup/import?mode={overwrite|merge}` (Multipart File)**:
+  - **Kiến trúc Native JDBC (`JdbcTemplate`)**: Cách ly hoàn toàn khỏi vòng đời Hibernate Entity (`@GeneratedValue`), giải quyết dứt điểm các lỗi `detached entity passed to persist`, `OptimisticLockException` và `UnexpectedRollbackException`.
+  - **Bảo toàn thời gian gốc**: Khôi phục chính xác 100% thời gian thực tế (`createdAt`, `updatedAt`) từ file JSON mà không bị JPA `@PrePersist` đè thành thời gian hiện tại.
+  - **Mode `overwrite`**: Gỡ khóa ngoại chéo (`transfer_id`, `transaction_id`), xóa sạch dữ liệu cũ theo quan hệ cha - con và chèn mới toàn bộ dữ liệu sạch.
+  - **Mode `merge` (Upsert)**: Kiểm tra bản ghi tồn tại theo ID. Nếu đã có $\rightarrow$ cập nhật lại thời gian tạo/sửa chuẩn và thông tin mới nhất; nếu chưa có $\rightarrow$ chèn mới.
+
 ---
 
 ### 🟡 GIAI ĐOẠN 3: Tích Hợp Webhooks Ngân Hàng & Dịch Vụ AI
@@ -282,8 +302,8 @@ sequenceDiagram
 
 | Phiên Bản | Mốc Thời Gian | Trọng Tâm Bàn Giao Backend |
 |---|:---:|---|
-| **v1.0.0** *(Hiện tại)* | 10/2026 | **Hoàn thành Core Backend & Telegram Assistant**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot toàn năng (bóc tách #tag, báo cáo 21:30, cảnh báo ngân sách $\ge 90\%$, OTP linking, Whitelist Guard). |
-| **v1.1.0** | 11/2026 | **Tối ưu kết nối Vue Client**: Hoàn thiện CORS `5173`, chuẩn hóa Global Error Handler, API ảnh hóa đơn tĩnh, đồng bộ API contract. |
+| **v1.0.0** | 10/2026 | **Hoàn thành Core Backend & Telegram Assistant**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot toàn năng (bóc tách #tag, báo cáo 21:30, cảnh báo ngân sách $\ge 90\%$, OTP linking, Whitelist Guard). |
+| **v1.1.0** *(Hiện tại)* | 10/2026 | **Tối ưu hóa Vue Client, Cashflow Forecast & 1-Click Backup**: CORS `5173`, Global Error Handler, API ảnh tĩnh, **Dự báo dòng tiền cá nhân** (`/cashflow/forecast`), **Sao lưu & Khôi phục 1-click** (`/backup/export`, `/backup/validate`, `/backup/import` qua `JdbcTemplate`), nâng cấp OpenAPI 2.8.5. |
 | **v2.0.0** | 04/2027 | **Tự động hóa & AI Engine**: Endpoint Bank Webhook (SePay/Casso), Gemini Flash Vision OCR đọc hóa đơn, Speech-to-Text tin nhắn thoại. |
 | **v2.5.0** | 08/2027 | **Net Worth & Investment APIs**: Entity & API quản lý Vàng, Sổ tiết kiệm kỳ hạn, Lãi suất, Crawl giá thị trường, Biểu đồ Net Worth. |
 | **v3.0.0** | 11/2027 | **Production Ready & Self-Hosted**: Redis Caching, Flyway DB Migration, Docker Compose trọn bộ, Auto Backup database mã hóa lên Cloud. |

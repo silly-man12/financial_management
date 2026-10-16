@@ -140,6 +140,32 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Cơ chế Long Polling qua Java 21 HttpClient**:
   - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
 
+### 14. 🔮 Dự báo Dòng tiền Cá nhân (Personal Cashflow Forecast)
+- **Dự báo dòng tiền thông minh (`GET /cashflow/forecast`)**:
+  - Tự động phân tích dòng tiền của tháng hiện tại hoặc bất kỳ tháng nào trong tương lai theo tham số `targetMonth=MM/yyyy`.
+  - **Thu chi thực tế (`actualSoFar`)**: Tổng hợp chi tiết thu nhập, chi tiêu và dòng tiền ròng thực tế phát sinh từ đầu tháng đến ngày hiện tại.
+  - **Lịch lặp định kỳ chưa chạy (`recurringScheduled`)**: Quét toàn bộ các quy tắc giao dịch lặp lại (`RecurringTransaction`) còn lại trong tháng, liệt kê rõ từng khoản thu/chi sắp đến hạn, số tiền và tên quy tắc.
+  - **Dự phóng tài chính (`forecast`)**: Tính toán tổng thu nhập dự kiến (`projectedIncome`), tổng chi phí dự kiến (`projectedExpense`), số dư ròng dự phóng (`projectedNet`) và số dư ví dự kiến vào ngày cuối cùng của tháng (`projectedEndBalance`).
+  - **Hạn mức an toàn tiêu dùng (`safeToSpend`)**:
+    - Tính toán số tiền tối đa được phép chi tiêu an toàn mỗi ngày (`dailySafeSpend`), mỗi tuần (`weeklySafeSpend`) và toàn bộ tháng còn lại.
+    - Phân loại 4 cấp độ cảnh báo rủi ro tài chính: `SAFE` (An toàn - Xanh), `MODERATE` (Cần lưu ý - Vàng), `DANGER` (Nguy hiểm - Cam), `CRITICAL` (Báo động thâm hụt - Đỏ).
+    - Cung cấp khuyến nghị tài chính thông minh (`advice`) bám sát tình hình thực tế.
+  - **Đối soát ngân sách chi tiêu (`budgetComparison`)**: So sánh tổng ngân sách đã thiết lập với tổng chi dự kiến, tính toán độ lệch (`variance`) và cờ cảnh báo vỡ ngân sách (`isOverBudget`).
+
+### 15. 💾 Sao lưu & Khôi phục Dữ liệu 1-Click (1-Click Backup & Restore)
+- **Sao lưu toàn diện 1-Click (`POST /backup/export`)**:
+  - Xuất toàn bộ 11 bảng dữ liệu cá nhân (tài khoản, thẻ tag, giao dịch, thẻ giao dịch, giao dịch định kỳ, ngân sách, thẻ ngân sách, mục tiêu tiết kiệm, đóng góp quỹ, sổ nợ, thanh toán nợ) ra 1 file JSON chuẩn UTF-8.
+  - Tên file chuẩn hóa theo ID người dùng và mốc thời gian: `backup_{userId}_{yyyy-MM-ddTHH-mm}.json`.
+  - Tùy chọn kèm ảnh hóa đơn (`includeImages=true|false`).
+- **Thẩm định an toàn trước khi khôi phục (`POST /backup/validate`)**:
+  - Tiếp nhận file backup qua `multipart/form-data`.
+  - Kiểm tra tính hợp lệ của cấu trúc JSON, phiên bản schema (`schemaVersion: 1.0`), kiểm tra email sở hữu và đếm chi tiết số lượng bản ghi của từng bảng dữ liệu.
+- **Khôi phục linh hoạt & Siêu an toàn (`POST /backup/import`)**:
+  - **Chế độ `overwrite` (Khuyến nghị)**: Tự động gỡ các khóa ngoại chéo (`transfer_id`, `transaction_id`), xóa sạch toàn bộ dữ liệu cũ của user theo đúng quan hệ cha - con, và nạp lại toàn bộ dữ liệu sạch từ file backup.
+  - **Chế độ `merge` (Upsert)**: Đối soát theo ID bản ghi. Nếu đã có trong DB $\rightarrow$ cập nhật lại thông tin mới nhất và thời gian tạo chuẩn; nếu chưa có $\rightarrow$ chèn mới.
+  - **Kiến trúc Native JDBC (`JdbcTemplate`)**: Tách biệt 100% khỏi vòng đời Hibernate Entity (`@GeneratedValue`), giải quyết dứt điểm các ngoại lệ `detached entity passed to persist`, `OptimisticLockException` và `UnexpectedRollbackException`.
+  - **Bảo toàn thời gian gốc**: Khôi phục chính xác 100% mốc thời gian tạo (`createdAt`) và cập nhật (`updatedAt`) ban đầu của các giao dịch, không bị JPA `@PrePersist` đè thành ngày hôm nay.
+
 ---
 
 ## 🛠️ Công nghệ sử dụng
@@ -149,11 +175,12 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 | **Core Platform** | Java | **JDK 21** | Nền tảng thực thi chính |
 | **Framework** | Spring Boot | **3.5.5** | Framework nền tảng backend |
 | **Data & ORM** | Spring Data JPA / Hibernate | 3.5.5 | Truy vấn dữ liệu, Specification |
+| **Native Data Access** | Spring JDBC / `JdbcTemplate` | 3.5.5 | Xử lý import/restore dữ liệu tốc độ cao, độc lập ORM |
 | **Database** | Microsoft SQL Server | 2012+ | RDBMS lưu trữ dữ liệu |
 | **JDBC Driver** | `mssql-jdbc` | 12.6.1.jre11 | Driver kết nối MS SQL Server |
 | **Security** | Spring Security 6 | 3.5.5 | Stateless Security Filter Chain |
 | **Token Auth** | JJWT (`jjwt-api`, `jjwt-impl`) | **0.11.5** | Tạo và kiểm tra JWT Token |
-| **API Docs** | Springdoc OpenAPI / Swagger UI | **2.5.0** | Tài liệu tương tác API trực quan |
+| **API Docs** | Springdoc OpenAPI / Swagger UI | **2.8.5** | Tài liệu tương tác API trực quan (tương thích Spring 6.2+) |
 | **Object Mapping** | MapStruct | **1.5.5.Final** | Chuyển đổi Entity <-> DTO hiệu năng cao |
 | **Caching** | Spring Cache | 3.5.5 | Cache thông tin người dùng xác thực, giảm tải DB |
 | **PDF Generation** | iText | **5.5.13.3** | Xuất tài liệu PDF báo cáo tài chính |
@@ -457,6 +484,18 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
 |---|---|---|---|
 | `GET` | `/dashboard?month={m}&year={y}` | Authenticated | **Tổng hợp trọn bộ dữ liệu màn hình chính (Dashboard)**: Gom 5 khối dữ liệu gồm 8 chỉ số KPI tài chính, chuỗi điểm dữ liệu biểu đồ xu hướng ngày, danh sách thẻ ví & số dư, tổng hợp ngân sách sử dụng và 6 giao dịch gần đây nhất trong 1 request duy nhất (mặc định lấy tháng/năm hiện tại nếu bỏ trống). Giảm số lượng round-trip request từ Frontend Vue.js xuống tối thiểu. |
+
+### 14. Dự báo Dòng tiền Cá nhân (`/cashflow`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/cashflow/forecast?targetMonth=MM/yyyy` | Authenticated | **Dự báo dòng tiền cá nhân & Hạn mức an toàn chi tiêu**: Phân tích thu chi thực tế (`actualSoFar`), lịch lặp định kỳ chưa chạy (`recurringScheduled`), dự báo số dư ví cuối tháng (`projectedEndBalance`), tính toán hạn mức an toàn tiêu dùng mỗi ngày/tuần (`safeToSpend`), 4 cấp độ cảnh báo rủi ro (`SAFE`, `MODERATE`, `DANGER`, `CRITICAL`), lời khuyên tài chính thông minh (`advice`) và đối soát ngân sách tháng (`budgetComparison`). Mặc định lấy tháng/năm hiện tại nếu bỏ trống `targetMonth`. |
+
+### 15. Sao lưu & Khôi phục Dữ liệu 1-Click (`/backup`)
+| Method | Endpoint | Content-Type | Yêu cầu quyền | Mô tả |
+|---|---|---|---|---|
+| `POST` | `/backup/export?includeImages={true\|false}` | - | Authenticated | **Sao lưu toàn bộ dữ liệu ra file JSON**: Xuất trọn vẹn 11 bảng dữ liệu cá nhân ra file `backup_{userId}_{timestamp}.json` tải về dạng stream attachment (tùy chọn kèm ảnh hóa đơn). |
+| `POST` | `/backup/validate` | `multipart/form-data` | Authenticated | **Thẩm định file backup trước khi khôi phục**: Kiểm tra tính hợp lệ của file backup JSON, phiên bản schema (`1.0`), email chủ sở hữu và thống kê chi tiết số lượng bản ghi từng bảng để người dùng kiểm tra trước khi bấm nạp. |
+| `POST` | `/backup/import?mode={overwrite\|merge}` | `multipart/form-data` | Authenticated | **Khôi phục dữ liệu siêu tốc & an toàn**: Nạp dữ liệu từ file backup JSON qua `JdbcTemplate` độc lập ORM, bảo toàn 100% thời gian tạo (`createdAt`) và sửa (`updatedAt`) gốc. Hỗ trợ 2 chế độ: `overwrite` (xóa sạch toàn bộ dữ liệu cũ của user rồi nạp mới) hoặc `merge` (upsert dữ liệu, cập nhật lại ngày tạo cho bản ghi đã tồn tại). |
 
 ---
 
