@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import org.springframework.format.annotation.DateTimeFormat;
 import lombok.Data;
 
@@ -22,6 +23,7 @@ public class TransferRequest {
     private BigDecimal amount;
     private String description;
 
+    @JsonAlias({"createdAt", "created_at"})
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime createAt;
 }

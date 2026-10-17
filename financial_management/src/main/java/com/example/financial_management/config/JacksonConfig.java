@@ -1,5 +1,7 @@
 package com.example.financial_management.config;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.TimeZone;
 
@@ -7,9 +9,8 @@ import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilde
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.example.financial_management.exception.FlexibleLocalDateDeserializer;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 
@@ -28,8 +29,8 @@ public class JacksonConfig {
             builder.serializers(new LocalDateTimeSerializer(dateTimeFormatter));
             builder.serializers(new LocalDateSerializer(dateFormatter));
 
-            builder.deserializers(new LocalDateTimeDeserializer(dateTimeFormatter));
-            builder.deserializers(new LocalDateDeserializer(dateFormatter));
+            builder.deserializerByType(LocalDateTime.class, new FlexibleLocalDateTimeDeserializer());
+            builder.deserializerByType(LocalDate.class, new FlexibleLocalDateDeserializer());
 
             builder.featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
             builder.timeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
