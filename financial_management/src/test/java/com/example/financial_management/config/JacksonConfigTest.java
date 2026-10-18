@@ -62,4 +62,48 @@ class JacksonConfigTest {
         assertEquals(LocalDateTime.of(2026, 10, 9, 14, 30, 0), result.getDateTime());
         assertEquals(LocalDate.of(2026, 10, 9), result.getDate());
     }
+
+    @Test
+    @DisplayName("UTC ISO-8601 strings with 'Z' and milliseconds should deserialize into local Vietnam time")
+    void testUtcIsoStringDeserialization() throws Exception {
+        // 2026-10-15T18:12:00.000Z in UTC is 2026-10-16T01:12:00 in Asia/Ho_Chi_Minh (UTC+7)
+        String json = "{\"dateTime\":\"2026-10-15T18:12:00.000Z\",\"date\":\"2026-10-15T18:12:00.000Z\"}";
+
+        SampleDateDto result = objectMapper.readValue(json, SampleDateDto.class);
+
+        assertEquals(LocalDateTime.of(2026, 10, 16, 1, 12, 0), result.getDateTime());
+        assertEquals(LocalDate.of(2026, 10, 16), result.getDate());
+    }
+
+    @Test
+    @DisplayName("TransferRequest should deserialize successfully with ISO-8601 UTC timestamp")
+    void testTransferRequestDeserialization() throws Exception {
+        String json = "{"
+                + "\"accountId\":\"eccc151e-c811-4298-b726-e05ad997b495\","
+                + "\"targetAccountId\":\"c08b28d3-3ee1-4ac9-b610-888f0f497591\","
+                + "\"amount\":500000,"
+                + "\"description\":\"Chuyen tien\","
+                + "\"createAt\":\"2026-10-15T18:12:00.000Z\""
+                + "}";
+
+        com.example.financial_management.model.transaction.TransferRequest req =
+                objectMapper.readValue(json, com.example.financial_management.model.transaction.TransferRequest.class);
+
+        assertNotNull(req);
+        assertEquals(LocalDateTime.of(2026, 10, 16, 1, 12, 0), req.getCreateAt());
+
+        // Also test alias createdAt
+        String jsonWithAlias = "{"
+                + "\"accountId\":\"eccc151e-c811-4298-b726-e05ad997b495\","
+                + "\"targetAccountId\":\"c08b28d3-3ee1-4ac9-b610-888f0f497591\","
+                + "\"amount\":500000,"
+                + "\"createdAt\":\"2026-10-15T18:12:00.000Z\""
+                + "}";
+
+        com.example.financial_management.model.transaction.TransferRequest reqWithAlias =
+                objectMapper.readValue(jsonWithAlias, com.example.financial_management.model.transaction.TransferRequest.class);
+
+        assertNotNull(reqWithAlias);
+        assertEquals(LocalDateTime.of(2026, 10, 16, 1, 12, 0), reqWithAlias.getCreateAt());
+    }
 }

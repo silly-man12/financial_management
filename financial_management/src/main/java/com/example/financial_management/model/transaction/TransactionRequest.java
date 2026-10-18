@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import org.springframework.format.annotation.DateTimeFormat;
 import lombok.Data;
 
@@ -19,6 +20,7 @@ public class TransactionRequest {
     private boolean haveImage;
     private List<String> tags;
 
+    @JsonAlias({"createdAt", "created_at"})
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime createAt;
 }

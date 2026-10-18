@@ -167,6 +167,12 @@ flowchart TD
   - Xử lý mã lỗi `401 Unauthorized` và `403 Forbidden` rõ ràng để Axios Interceptor của Vue tự động điều hướng sang trang đăng nhập.
   - Đồng bộ hóa toàn bộ response 401 từ `AuthFilter` qua Jackson `ObjectMapper` thay vì Gson.
   - Ẩn hoàn toàn `stackTrace` trong các response lỗi môi trường production.
+- [x] **Xử lý ngày giờ linh hoạt toàn cục (Flexible ISO-8601 & UTC Deserialization)**:
+  - Triển khai `FlexibleLocalDateTimeDeserializer` và nâng cấp `FlexibleLocalDateDeserializer` đăng ký toàn cục trong `JacksonConfig`.
+  - Giải quyết triệt để lỗi `DateTimeParseException` (HTTP 400 `Malformed request payload`) khi Frontend (Vue.js/JavaScript `new Date().toISOString()`) gửi timestamp UTC có đuôi `Z` và mili-giây (ví dụ: `2026-10-15T18:12:00.000Z`).
+  - Tự động nhận diện và chuyển đổi chuẩn xác thời gian UTC/Offset sang múi giờ Việt Nam (`Asia/Ho_Chi_Minh` UTC+7) thành `LocalDateTime`.
+  - Hỗ trợ đa dạng định dạng đầu vào: ISO Instant (`...Z`), Offset (`+07:00`), Local ISO có/không mili-giây, dấu cách phân cách (`yyyy-MM-dd HH:mm:ss`), Date-only (`yyyy-MM-dd`) và timestamp số (Epoch milliseconds).
+  - Bổ sung `@JsonAlias({"createdAt", "created_at"})` trên `createAt` của `TransferRequest` và `TransactionRequest` tương thích 100% với các client khác nhau.
 
 #### 2. Các API Phục Vụ Riêng Cho Giao Diện Vue.js Dashboard:
 - [x] **`GET /dashboard?month={m}&year={y}` (Dashboard Aggregation API)**: API tổng hợp gom 5 khối dữ liệu trọng yếu (KPI 8 chỉ số, chart xu hướng theo ngày, danh sách thẻ ví, tổng hợp ngân sách sử dụng, và 6 giao dịch gần nhất) trong 1 request duy nhất để Vue render tức thì màn hình Dashboard.

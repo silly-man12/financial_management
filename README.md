@@ -45,7 +45,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - Ghi nhận khoản Chi (`EXPENSE = 0`), Thu (`INCOME = 1`), Chuyển khoản giữa 2 ví (`TRANSFER = 2`).
   - Hỗ trợ chuyển tiền nội bộ giữa 2 tài khoản, tự động cập nhật số dư cả ví nguồn và ví đích.
 - **Hóa đơn đính kèm & Thẻ tag**: Tải lên ảnh hóa đơn / biên lai thanh toán (`multipart/form-data`, file tối đa 20MB), tự động sinh đường dẫn ảnh đầy đủ (`imageUrl`) để Vue.js Client hiển thị trực tiếp qua endpoint tĩnh `/images/**`, và gắn nhãn thẻ tag.
-- **Linh hoạt định dạng ngày giờ**: Tự động parse đa định dạng thời gian (`yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd`, ISO OffsetDateTime).
+- **Linh hoạt định dạng ngày giờ (Flexible DateTime Deserialization)**: Tự động giải mã đa định dạng thời gian: Chuẩn ISO-8601 UTC có đuôi `Z` và mili-giây (ví dụ: `2026-10-15T18:12:00.000Z` từ `Date.toISOString()` của Vue.js / JavaScript), chuỗi có offset múi giờ (`+07:00`), ISO local datetime (`yyyy-MM-dd'T'HH:mm:ss[.SSS]`), định dạng dấu cách (`yyyy-MM-dd HH:mm:ss`), ngày (`yyyy-MM-dd`) và timestamp số (Epoch milliseconds). Tự động quy đổi chuẩn xác về giờ địa phương Việt Nam (`Asia/Ho_Chi_Minh`).
 - **Lọc & Phân trang**: Tìm kiếm giao dịch nâng cao theo tài khoản, danh mục, khoảng tiền, thời gian thông qua Spring Data JPA Specification.
 - **API tiện ích widget**: Tra cứu nhanh 6 giao dịch gần nhất theo từng tài khoản (`GET /{accountId}/recent`).
 - **Hoàn tác tự động**: Khi xóa giao dịch, hệ thống tự động hoàn tác (revert) số dư về tài khoản tương ứng.
@@ -530,8 +530,16 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
   "executionTimeInSeconds": 0.005
 }
 ```
-- **Validation Error (`400 BAD_REQUEST`)**: Trả về chi tiết các trường vi phạm qua mảng `details: ["field: lý do lỗi"]`.
-- **Định dạng thời gian chuẩn ISO-8601**: Mọi đối tượng thời gian trả về đều được serialize đồng nhất theo định dạng **ISO-8601 UTC** (`yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`) thông qua cấu hình `JacksonConfig`.
+- **Định dạng thời gian chuẩn ISO-8601 & Bộ giải mã linh hoạt (`JacksonConfig`)**:
+  - **Serialization**: Mọi đối tượng thời gian trả về đều được serialize chuẩn mực theo định dạng ISO-8601 (`yyyy-MM-dd'T'HH:mm:ss`) với múi giờ `Asia/Ho_Chi_Minh`.
+  - **Deserialization (`FlexibleLocalDateTimeDeserializer`, `FlexibleLocalDateDeserializer`)**: Tự động nhận diện và xử lý linh hoạt mọi định dạng từ Client:
+    - ISO Instant UTC với đuôi `Z` và mili-giây (`2026-10-15T18:12:00.000Z` từ `Date.toISOString()` của Vue.js / JavaScript) $\rightarrow$ tự động chuyển đổi sang `LocalDateTime` theo múi giờ `Asia/Ho_Chi_Minh` (UTC+7).
+    - ISO với múi giờ Offset (`2026-10-16T01:12:00+07:00`).
+    - ISO Local Date-Time có hoặc không có mili-giây (`yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss.SSS`).
+    - Chuỗi thời gian chuẩn thông thường (`yyyy-MM-dd HH:mm:ss`, `dd/MM/yyyy HH:mm:ss`, `yyyy/MM/dd HH:mm:ss`).
+    - Date-only (`yyyy-MM-dd`, `yyyy-M-d`...) $\rightarrow$ tự động gắn mốc đầu ngày `00:00:00`.
+    - Epoch Milliseconds (timestamp dạng số nguyên `Long`).
+  - **DTO Field Alias**: Hỗ trợ `@JsonAlias({"createdAt", "created_at"})` trên các trường ngày tạo (`createAt`), tương thích hoàn toàn với mọi biến thể payload từ Frontend.
 
 ---
 
