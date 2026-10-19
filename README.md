@@ -27,20 +27,23 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ## ✨ Tính năng chính
 
-### 1. 👤 Quản lý Người dùng & Xác thực (Auth & Users)
+### 1. 🔐 Xác thực & Phân quyền (Authentication & Security)
 - **Đăng ký / Đăng nhập**: Xác thực không trạng thái (stateless) qua JWT Token, phân quyền người dùng `USER (2)` và `ADMIN (1)`.
 - **Đăng nhập Google OAuth2 (`/auth/google`, `/auth/google-callback`)**: Đăng nhập nhanh bằng tài khoản Google (OAuth 2.0 Authorization Code flow). Tự động xác thực tài khoản qua Google OpenID Connect (OIDC), tra cứu email người dùng trong hệ thống, sinh JWT Token và chuyển hướng an toàn về ứng dụng Frontend (Vue/React).
+- **Quên / Đặt lại mật khẩu**: Gửi email chứa liên kết token tạm thời (hạn 15 phút) qua Gmail SMTP, hỗ trợ xác thực mã token và đặt mật khẩu mới.
+
+### 2. 👤 Quản lý Hồ sơ & Người dùng (User Management)
+- **Thông tin tài khoản (`/users/me`)**: Xem chi tiết thông tin tài khoản cá nhân đang đăng nhập.
 - **Cập nhật Hồ sơ Cá nhân (`/users/updateProfile`)**: Cho phép cập nhật linh hoạt Họ tên và/hoặc Địa chỉ Email (tự động kiểm tra trùng lặp email với các tài khoản khác, chỉ lưu khi có thay đổi).
 - **Mật khẩu an toàn**: Mã hóa mật khẩu nhiều lớp bằng BCrypt kết hợp Custom Salt độc lập, hỗ trợ đổi mật khẩu (`/users/changePassword`).
-- **Quên / Đặt lại mật khẩu**: Gửi email chứa liên kết token tạm thời (hạn 15 phút) qua Gmail SMTP, hỗ trợ xác thực mã token và đặt mật khẩu mới.
-- **Quản trị người dùng (Admin)**: Danh sách toàn bộ tài khoản người dùng, chuyển đổi trạng thái Hoạt động / Khóa (`ACTIVE = 1` / `INACTIVE = 2`).
+- **Quản trị người dùng (Admin)**: Danh sách toàn bộ tài khoản người dùng (`/users/listUser`), chuyển đổi trạng thái Hoạt động / Khóa (`ACTIVE = 1` / `INACTIVE = 2`).
 
-### 2. 💳 Quản lý Tài khoản & Ví (Accounts)
+### 3. 💳 Quản lý Tài khoản & Ví (Accounts)
 - Hỗ trợ đa dạng các loại tài khoản: Ví tiền mặt (`CASH`), Ngân hàng (`BANK`), Thẻ tín dụng (`CREDIT_CARD`), Ví điện tử (`E_WALLET`), Tài khoản đầu tư (`INVESTMENT`), Sổ tiết kiệm (`SAVINGS`), Khác (`OTHER`).
 - Tự động cộng/trừ số dư theo thời gian thực tương ứng với từng giao dịch phát sinh (thu, chi, chuyển khoản, nạp/rút quỹ tiết kiệm, thanh toán nợ).
 - **Ràng buộc an toàn**: Chặn xóa cứng tài khoản nếu đã phát sinh lịch sử giao dịch sao kê để tránh thất thoát dữ liệu sổ sách.
 
-### 3. 💸 Quản lý Giao dịch (Transactions)
+### 4. 💸 Quản lý Giao dịch (Transactions)
 - **Thu / Chi / Chuyển khoản**:
   - Ghi nhận khoản Chi (`EXPENSE = 0`), Thu (`INCOME = 1`), Chuyển khoản giữa 2 ví (`TRANSFER = 2`).
   - Hỗ trợ chuyển tiền nội bộ giữa 2 tài khoản, tự động cập nhật số dư cả ví nguồn và ví đích.
@@ -50,25 +53,25 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **API tiện ích widget**: Tra cứu nhanh 6 giao dịch gần nhất theo từng tài khoản (`GET /{accountId}/recent`).
 - **Hoàn tác tự động**: Khi xóa giao dịch, hệ thống tự động hoàn tác (revert) số dư về tài khoản tương ứng.
 
-### 4. 🏷️ Quản lý Thẻ Tag (Tags)
+### 5. 🏷️ Quản lý Thẻ Tag (Tags)
 - Khởi tạo và quản lý nhãn dán tùy chỉnh kèm mã màu sắc hiển thị.
 - Gắn nhiều thẻ tag vào một giao dịch thu chi.
 - Báo cáo và thống kê tổng hợp số tiền thu/chi, số dư ròng và số lượng giao dịch theo từng thẻ tag cụ thể (`/tags/summary`).
 - **Lọc theo khoảng thời gian linh hoạt**: Hỗ trợ tham số `startDate` và `endDate` (tự động nhận diện đa định dạng ngày giờ, hoán đổi hợp lệ nếu ngày bắt đầu lớn hơn ngày kết thúc).
 - **Loại trừ chuyển khoản nội bộ**: Thống kê tag tự động loại trừ giao dịch chuyển khoản (`Category = 16: Transfer`) để phản ánh chính xác thu chi thực tế.
 
-### 5. 📊 Ngân sách Chi tiêu (Budgets)
+### 6. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục hoặc gắn thẻ Tag cho tháng/năm.
 - API đối soát ngân sách chi tiết (`/budgets/checking`): Tự động tính toán số tiền đã chi, số dư còn lại, quy đổi USD và tỷ lệ phần trăm đã tiêu (`usedPercentage`) theo từng ngân sách cụ thể để cảnh báo bội chi.
 - API tổng hợp toàn bộ ngân sách (`/budgets/summary`): Tính toán tổng ngân sách, tổng chi tiêu thực tế, số dư còn lại, quy đổi USD và **tỷ lệ phần trăm (%) đã sử dụng trên tổng số tiền của tất cả ngân sách cộng lại**, kèm cờ cảnh báo vượt ngân sách tổng (`isOverBudget`).
 
-### 6. 🔄 Giao dịch Định kỳ (Recurring Transactions)
+### 7. 🔄 Giao dịch Định kỳ (Recurring Transactions)
 - Tự động hóa các khoản chi định kỳ (tiền nhà, hóa đơn điện nước, netflix...) hoặc thu định kỳ (lương, cổ tức...).
 - Chu kỳ hỗ trợ: Hàng ngày (`DAILY`), Hàng tuần (`WEEKLY`), Hàng tháng (`MONTHLY`), Hàng năm (`YEARLY`).
 - **Cronjob tự động**: Quét lúc `00:00:00` mỗi ngày để tự động tạo giao dịch khi tới hạn (`nextExecutionDate`).
 - Hỗ trợ kích hoạt thủ công tức thì (`POST /{id}/execute-now`) hoặc Bật / Tạm dừng quy tắc (`status: 1/2`).
 
-### 7. 🎯 Mục tiêu Tiết kiệm (Saving Goals & Contributions)
+### 8. 🎯 Mục tiêu Tiết kiệm (Saving Goals & Contributions)
 - Lập kế hoạch tài chính cho các mục tiêu (Mua nhà, Mua xe, Du lịch, Quỹ khẩn cấp...).
 - **Lịch sử đóng góp chi tiết (`SavingGoalContribution`)**:
   - Ghi vết từng lần Nạp tiền (`DEPOSIT = 1`) hoặc Rút tiền (`WITHDRAW = 2`).
@@ -76,20 +79,20 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - Tự động đổi trạng thái sang Hoàn thành (`COMPLETED = 2`) khi tiến độ đạt $\ge 100\%$.
   - Hỗ trợ hoàn tác một lần đóng góp, tự động khôi phục số dư ví và số tiền tích lũy của mục tiêu.
 
-### 8. 🤝 Sổ nợ & Quản lý Nợ (Debt Management)
+### 9. 🤝 Sổ nợ & Quản lý Nợ (Debt Management)
 - Phân loại rõ ràng: **Đi vay (`BORROW = 1` - Nợ phải trả)** và **Cho vay (`LEND = 2` - Nợ phải thu)**.
 - Quản lý số nợ gốc (`amount`) và số nợ còn lại (`remainingAmount`).
 - Ghi nhận lịch sử từng đợt trả bớt / thu nợ (`DebtPayment`), tự động trừ số nợ còn lại và cập nhật ví tiền.
 - **Tất toán / Miễn nợ (`POST /{id}/settle`)**: Cho phép miễn nợ hoặc chốt sổ mà không gây lệch số dư ví.
 - **Tự động chuyển trạng thái**: Đổi sang `PAID = 2` khi nợ về 0, hoặc `OVERDUE = 3` khi quá hạn hẹn trả (`dueDate`).
 
-### 9. 💱 Tỷ giá Ngoại tệ (Currency Exchange)
+### 10. 💱 Tỷ giá Ngoại tệ (Currency Exchange)
 - Tích hợp dịch vụ theo dõi tỷ giá ngoại tệ USD/VND.
 - Cronjob chạy định kỳ hàng ngày đồng bộ tỷ giá trực tuyến vào cơ sở dữ liệu.
 - Cho phép kích hoạt đồng bộ thủ công qua API (`POST /currency-exchange/sync`).
 - Tự động quy đổi và cung cấp số liệu USD tương ứng trên các báo cáo thống kê (`balanceUsd`, `amountUsd`...).
 
-### 10. 📈 Báo cáo & Phân tích Tài chính Chuyên sâu (Reports & Analytics)
+### 11. 📈 Báo cáo & Phân tích Tài chính Chuyên sâu (Reports & Analytics)
 - **Analytics KPI Dashboard (`/reports/analytics`)**:
   - Trả về 8 chỉ số tài chính chủ chốt: Tổng thu nhập, Tổng chi tiêu, Dòng tiền ròng (Net Savings), Tỷ lệ tiết kiệm (Savings Rate %), Chi tiêu trung bình/ngày, kèm các giá trị quy đổi USD.
   - Chuỗi dữ liệu xu hướng dòng tiền theo ngày (`chartPoints`) phục vụ vẽ biểu đồ đường/cột trực quan.
@@ -104,7 +107,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Loại trừ giao dịch nội bộ**: Báo cáo tài chính tự động loại trừ Chuyển khoản nội bộ (`Category = 16`) và Trả/thu nợ (`Category = 9`) để đảm bảo số liệu thu nhập và chi phí thực tế không bị tính trùng (double counting).
 - **Xuất file PDF**: Tự động tạo và xuất báo cáo tài chính dạng PDF chuyên nghiệp theo tháng và theo năm với iText.
 
-### 11. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
+### 12. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
 - **Ghi chép giao dịch trong 3 giây bằng tin nhắn tự nhiên**:
   - Nhập số tiền linh hoạt: Viết tắt nghìn (`50k`, `45.5k`, `30 nghin`), triệu (`1.5tr`, `2m`, `12.3tr`), tỷ (`1ty`, `1b`), số có dấu phân cách (`32.500`, `127,500`), số nguyên (`32500 banh mi`), số nhỏ `< 1000` tự động hiểu là nghìn (`100 do xang` = 100.000đ), số lẻ kèm đơn vị (`500d keo` = 500đ).
   - Vị trí tự do ở đầu hoặc cuối câu (`50k cf` hoặc `cf 50k`).
@@ -139,6 +142,12 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
     - **Phân cấp báo động**: `⚠️ CẢNH BÁO VƯỢT HẠN MỨC NGÂN SÁCH!` khi $\ge 90\%$ và `🚨 BÁO ĐỘNG ĐỎ VƯỢT HẠN MỨC NGÂN SÁCH!` khi $\ge 100\%$ (kèm số tiền vượt hạn mức).
 - **Cơ chế Long Polling qua Java 21 HttpClient**:
   - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
+
+### 13. 📊 Màn hình Tổng quan Hợp nhất (Aggregated Dashboard)
+- **API gom cụm dữ liệu tổng hợp (`GET /dashboard`)**:
+  - Gom trọn bộ 5 khối dữ liệu chỉ trong **1 request duy nhất**: 8 chỉ số KPI tài chính, chuỗi điểm dữ liệu biểu đồ xu hướng ngày (`chartPoints`), danh sách thẻ ví & số dư, tổng hợp ngân sách sử dụng và 6 giao dịch gần đây nhất.
+  - Tối ưu hóa round-trip request từ Frontend Vue.js 3 xuống tối thiểu, giảm độ trễ tải trang và tăng tốc độ hiển thị cho người dùng.
+  - Hỗ trợ tham số lọc theo tháng và năm (`month`, `year`), mặc định lấy tháng/năm hiện tại nếu bỏ trống.
 
 ### 14. 🔮 Dự báo Dòng tiền Cá nhân (Personal Cashflow Forecast)
 - **Dự báo dòng tiền thông minh (`GET /cashflow/forecast`)**:
@@ -207,7 +216,7 @@ financial_management/
         │   ├── java/com/example/financial_management/
         │   │   ├── config/            # Cấu hình: Security, AuthFilter, Swagger, Web CORS, Jackson ISO-8601, Converter
         │   │   ├── constant/          # Hằng số hệ thống: Category, TransactionType, Status, DebtType...
-        │   │   ├── controllers/       # REST Controllers: Auth, User, Account, Transaction, Report, Telegram...
+        │   │   ├── controllers/       # REST Controllers: Auth, User, Account, Transaction, Report, Telegram, Dashboard, Cashflow, Backup...
         │   │   ├── cronjob/           # Tác vụ định kỳ: RecurringTransactionCronjob, CurrencyExchangeCronjob, TelegramDailySummaryCronjob
         │   │   ├── entity/            # JPA Entities: User, Account, Transaction, Budget, Debt...
         │   │   │   └── base/          # Base Entity (UUID id, Audit createdAt, updatedAt...)
@@ -215,7 +224,7 @@ financial_management/
         │   │   ├── mapper/            # MapStruct mappers (SavingGoalMapper, DebtMapper...)
         │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse, telegram/
         │   │   ├── repository/        # Spring Data JPA Repositories (TransactionRepository, ...)
-        │   │   ├── services/          # Business Logic Services (TransactionService, ReportService...)
+        │   │   ├── services/          # Business Logic Services (TransactionService, ReportService, CashflowService, BackupService...)
         │   │   ├── telegram/          # Telegram Bot: Config, Client, PollingService, Parser, CommandHandler, Service
         │   │   └── util/              # Tiện ích bổ trợ (JwtTokenUtil, DateTimeUtils...)
         │   └── resources/
@@ -585,6 +594,7 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
 | `9` | Debt (Trả nợ / Thu nợ) | Expense / Debt | **Được tự động loại trừ khỏi báo cáo thu/chi thông thường** |
 | `10`| Other Expense (Chi tiêu khác) | Expense | Các khoản chi phí khác |
 | `18`| Traveling (Du lịch) | Expense | Chi tiêu du lịch, vé máy bay, khách sạn |
+| `19`| Present (Quà biếu / Tặng) | Expense | Quà biếu, quà sinh nhật, cưới hỏi, mừng lễ, từ thiện... |
 | `11`| Salary (Tiền lương) | Income | Thu nhập cố định |
 | `12`| Business (Kinh doanh) | Income | Thu nhập từ buôn bán, kinh doanh |
 | `13`| Investments (Đầu tư) | Income | Cổ phiếu, lợi nhuận đầu tư |

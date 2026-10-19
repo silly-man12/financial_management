@@ -27,12 +27,15 @@ public class Category {
     // Savings Category
     public static final int SAVINGS = 17;
 
+    // Expense Category
+    public static final int PRESENT = 19;
+
     private Category() {
         // Utility class
     }
 
     public static boolean isExpense(int categoryId) {
-        return (categoryId >= FOOD && categoryId <= OTHER_EXPENSE) || categoryId == TRAVELING;
+        return (categoryId >= FOOD && categoryId <= OTHER_EXPENSE) || categoryId == TRAVELING || categoryId == PRESENT;
     }
 
     public static boolean isIncome(int categoryId) {
@@ -77,6 +80,8 @@ public class Category {
                 return "Transfer";
             case SAVINGS:
                 return "Savings";
+            case PRESENT:
+                return "Present";
             default:
                 return "Unknown";
         }
