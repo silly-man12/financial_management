@@ -38,7 +38,7 @@ public class DebtController {
 
         @GetMapping
         @Operation(summary = "Lấy danh sách khoản nợ (hỗ trợ lọc theo type: 1-Đi vay, 2-Cho vay và status)")
-        public ResponseEntity<AbstractResponse<List<DebtResponse>>> getAll(
+        public ResponseEntity<AbstractResponse<List<DebtResponse>>> getAllDebts(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
                         @RequestParam(value = "type", required = false) Integer type,
                         @RequestParam(value = "status", required = false) Integer status) {

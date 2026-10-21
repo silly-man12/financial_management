@@ -176,14 +176,14 @@ public class TelegramMessageParser {
         // 3. Xác định loại giao dịch: EXPENSE vs INCOME
         int type = TransactionType.EXPENSE; // mặc định chi tiêu
         String lowerRaw = raw.toLowerCase();
-        if ("+".equals(amountResult.sign) || lowerRaw.startsWith("+") || lowerRaw.startsWith("thu ") || lowerRaw.startsWith("nhan ")) {
+        if ("+".equals(amountResult.sign) || lowerRaw.startsWith("+") || lowerRaw.startsWith("thu ") || lowerRaw.startsWith("nhan ") || lowerRaw.startsWith("duoc ")) {
             type = TransactionType.INCOME;
         } else if ("-".equals(amountResult.sign) || lowerRaw.startsWith("-") || lowerRaw.startsWith("chi ")) {
             type = TransactionType.EXPENSE;
         }
 
-        // Bỏ các từ tiền tố "chi", "thu", "nhan" ở đầu remainingText nếu có
-        remainingText = remainingText.replaceAll("^(?i)(chi|thu|nhan)\\s+", "");
+        // Bỏ các từ tiền tố "chi", "thu", "nhan", "duoc" ở đầu remainingText nếu có
+        remainingText = remainingText.replaceAll("^(?i)(chi|thu|nhan|duoc)\\s+", "");
 
         // 4. Tìm kiếm ví / tài khoản khớp với danh sách ví của người dùng
         String matchedAccountKeyword = null;
@@ -367,25 +367,51 @@ public class TelegramMessageParser {
             return transactionType == TransactionType.INCOME ? Category.OTHER_INCOME : Category.OTHER_EXPENSE;
         }
 
-        // Danh mục Thu nhập
-        if (matchesAny(text, "luong", "salary", "cty tra", "tinh luong", "ting ting", "cong ty", "luong cty")) {
+        // TH1: Người dùng đã chủ động chỉ định Thu nhập (dấu +, hoặc bắt đầu bằng thu/nhan/duoc)
+        if (transactionType == TransactionType.INCOME) {
+            if (matchesAny(text, "luong", "salary", "cty tra", "tinh luong", "ting ting", "cong ty", "luong cty")) {
+                return Category.SALARY;
+            }
+            if (matchesAny(text, "thuong", "bonus", "li xi", "lixi", "qua", "bieu", "tang", "cho", "mung tuoi", "khen thuong", "thuong tet", "thuong quy")) {
+                return Category.GIFTS;
+            }
+            if (matchesAny(text, "lai", "co phieu", "chung khoan", "crypto", "vang", "tiet kiem", "co tuc", "invest", "bds", "tien lai")) {
+                return Category.INVESTMENTS;
+            }
+            if (matchesAny(text, "ban hang", "kinh doanh", "doanh thu", "khach tra", "don hang", "tien hang", "khach chuyen")) {
+                return Category.BUSINESS;
+            }
+            return Category.OTHER_INCOME;
+        }
+
+        // TH2: Giao dịch chi tiêu thông thường (mặc định EXPENSE)
+        // 2.1 Kiểm tra các từ khóa ĐẶC TRƯNG CHẮC CHẮN của Thu nhập (tự động chuyển thành Thu nhập nếu gặp)
+        if (matchesAny(text, "luong", "salary", "cty tra luong", "tinh luong", "ting ting", "luong cty")) {
             return Category.SALARY;
         }
-        if (matchesAny(text, "thuong", "li xi", "qua", "bieu", "tang", "mung tuoi", "thuong tet", "thuong quy")) {
+        if (matchesAny(text, "thuong", "tien thuong", "thuong tet", "thuong quy", "thuong kpi", "thuong du an", "thuong nong",
+                "khen thuong", "bonus", "duoc tang", "duoc bieu", "duoc cho", "duoc li xi", "duoc mung tuoi", "nhan qua", "nhan thuong", "nhan li xi")) {
             return Category.GIFTS;
         }
-        if (matchesAny(text, "lai", "co phieu", "chung khoan", "crypto", "vang", "tiet kiem", "co tuc", "invest", "bds")) {
+        if (matchesAny(text, "co tuc", "lai tiet kiem", "lai ngan hang", "tien lai", "chia co tuc")) {
             return Category.INVESTMENTS;
         }
-        if (matchesAny(text, "ban hang", "kinh doanh", "doanh thu", "khach tra", "don hang", "tien hang")) {
+        if (matchesAny(text, "doanh thu", "khach tra tien", "khach chuyen khoan", "tien ban hang")) {
             return Category.BUSINESS;
         }
 
-        // Danh mục Chi tiêu
+        // 2.2 Các danh mục Chi tiêu (EXPENSE)
+        // Quà biếu / Tặng / Mừng cưới / Từ thiện (Chi tiền mang đi tặng/biếu/cho người khác)
+        if (matchesAny(text, "mung cuoi", "phong bi", "dam cuoi", "sinh nhat", "thoi noi", "mung tho", "day thang",
+                "tu thien", "quyen gop", "ung ho", "cong duc", "qua cap", "bieu", "bieu bo", "bieu me", "bieu ong", "bieu ba", "bieu sep",
+                "tang", "tang me", "tang vo", "tang qua", "tang hoa", "mua qua", "qua tet", "qua tang", "qua bieu",
+                "li xi", "lixi", "mung tuoi", "chia buon", "dam tang", "dam gio", "vieng")) {
+            return Category.PRESENT;
+        }
         if (matchesAny(text, "cf", "cafe", "ca phe", "com", "an", "trua", "toi", "sang", "tra sua", "pho", "bun", "mi", "banh", "lau", "nuong", "thit", "rau", "sieu thi", "cho", "winmart", "coopmart", "highlands", "starbucks", "phuc long", "snack", "do an", "nuoc", "uong", "bia", "nhau", "banh mi", "do an vat", "kem", "che", "hai san")) {
             return Category.FOOD;
         }
-        if (matchesAny(text, "xang", "grab", "be", "gojek", "gui xe", "ve xe", "rua xe", "taxi", "ben xe", "bus", "buyt", "sua xe", "nhot", "cau duong", "phi cau duong", "thay nhot")) {
+        if (matchesAny(text, "xang", "grab", "be", "gojek", "gui xe", "ve xe", "rua xe", "taxi", "ben xe", "bus", "buyt", "sua xe", "nhot", "cau duong", "phi cau duong", "thay nhot", "di lai", "ve tau")) {
             return Category.TRANSPORT;
         }
         if (matchesAny(text, "xem phim", "rap", "cinema", "cgv", "netflix", "spotify", "game", "steam", "bida", "karaoke", "du lich", "bar", "concert", "di choi", "giai tri", "bowling")) {
@@ -413,8 +439,8 @@ public class TelegramMessageParser {
             return Category.DEBT;
         }
 
-        // Mặc định
-        return transactionType == TransactionType.INCOME ? Category.OTHER_INCOME : Category.OTHER_EXPENSE;
+        // Mặc định cho chi tiêu không xác định
+        return Category.OTHER_EXPENSE;
     }
 
     private boolean matchesAny(String text, String... keywords) {
@@ -450,11 +476,15 @@ public class TelegramMessageParser {
             case Category.HOUSING -> "Nhà ở 🏠";
             case Category.DEBT -> "Sổ nợ 💳";
             case Category.TRAVELING -> "Du lịch ✈️";
+            case Category.PRESENT -> "Quà biếu / Tặng 🎁";
             case Category.SALARY -> "Lương 💵";
             case Category.BUSINESS -> "Kinh doanh 💼";
             case Category.INVESTMENTS -> "Đầu tư / Lãi 📈";
             case Category.GIFTS -> "Thưởng / Quà 🎁";
             case Category.OTHER_INCOME -> "Thu nhập khác 💰";
+            case Category.OTHER_EXPENSE -> "Chi tiêu khác 📦";
+            case Category.TRANSFER -> "Chuyển khoản 🔄";
+            case Category.SAVINGS -> "Tiết kiệm 🏦";
             default -> "Chi tiêu khác 🏷️";
         };
     }

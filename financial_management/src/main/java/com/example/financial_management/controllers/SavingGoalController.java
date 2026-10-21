@@ -41,7 +41,7 @@ public class SavingGoalController {
 
         @GetMapping
         @Operation(summary = "Lấy danh sách mục tiêu (hỗ trợ lọc theo status: 1 = Đang thực hiện, 2 = Hoàn thành)")
-        public ResponseEntity<AbstractResponse<List<SavingGoalResponse>>> getAll(
+        public ResponseEntity<AbstractResponse<List<SavingGoalResponse>>> getAllSavingGoals(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
                         @RequestParam(value = "status", required = false) Integer status) {
                 return new AbstractResponse<List<SavingGoalResponse>>()

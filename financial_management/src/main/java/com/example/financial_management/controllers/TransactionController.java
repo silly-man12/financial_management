@@ -39,14 +39,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RestController
 @RequestMapping("/transactions")
 @RequiredArgsConstructor
-@Tag(name = "Transaction API", description = "Transaction Management")
+@Tag(name = "Transaction API", description = "Quản lý giao dịch thu, chi, chuyển khoản nội bộ")
 public class TransactionController {
         private final TransactionService transactionService;
 
-        // Các endpoint khác sẽ được thêm vào đây
-
         // Lấy thông tin giao dịch theo ID
         @GetMapping("/{id}")
+        @Operation(summary = "Lấy thông tin chi tiết giao dịch theo ID")
         public ResponseEntity<AbstractResponse<TransactionResponse>> getById(
                         @PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
@@ -56,7 +55,8 @@ public class TransactionController {
 
         // Lấy tất cả giao dịch
         @GetMapping("/all")
-        public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getAll(
+        @Operation(summary = "Lấy tất cả giao dịch của người dùng (/transactions/all)")
+        public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getAllTransactions(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
 
                 return new AbstractResponse<List<TransactionResponse>>()
@@ -64,7 +64,8 @@ public class TransactionController {
         }
 
         @GetMapping("/all-with-pages")
-        public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAll(
+        @Operation(summary = "Lấy danh sách giao dịch có phân trang")
+        public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAllTransactionsWithPage(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
                         @RequestParam(defaultValue = "1") int page,
                         @RequestParam(defaultValue = "20") int size) {
@@ -76,6 +77,7 @@ public class TransactionController {
 
         // Lấy tất cả giao dịch theo accountId với phân trang
         @GetMapping("/{accountId}/all")
+        @Operation(summary = "Lấy tất cả giao dịch theo tài khoản ví (có phân trang)")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> getAllByAccount(
                         @PathVariable UUID accountId,
                         @RequestParam(defaultValue = "1") int page,
@@ -97,6 +99,7 @@ public class TransactionController {
         }
 
         @GetMapping("/by-category-and-month")
+        @Operation(summary = "Lấy danh sách giao dịch theo danh mục và tháng (MM/yyyy)")
         public ResponseEntity<AbstractResponse<List<TransactionResponse>>> getByCategoryAndMonth(
                         @RequestParam int category,
                         @RequestParam String monthYear,
@@ -107,6 +110,7 @@ public class TransactionController {
 
         // Tạo giao dịch mới với khả năng upload file
         @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @Operation(summary = "Tạo mới giao dịch (hỗ trợ upload ảnh hóa đơn)")
         public ResponseEntity<AbstractResponse<TransactionResponse>> createTransaction(
                         @ModelAttribute TransactionRequest request,
                         @RequestPart(value = "file", required = false) MultipartFile file,
@@ -117,6 +121,7 @@ public class TransactionController {
 
         // Cập nhật giao dịch theo ID
         @PostMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @Operation(summary = "Cập nhật thông tin giao dịch theo ID (hỗ trợ upload ảnh)")
         public ResponseEntity<AbstractResponse<TransactionUpdateResponse>> updateTransaction(
                         @PathVariable("id") UUID transactionId,
                         @ModelAttribute TransactionRequest request,
@@ -130,6 +135,7 @@ public class TransactionController {
 
         // Xóa giao dịch theo ID
         @DeleteMapping("/{id}")
+        @Operation(summary = "Xóa giao dịch theo ID (tự động hoàn tác số dư ví)")
         public ResponseEntity<AbstractResponse<Boolean>> dropTransaction(@PathVariable UUID id,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<Boolean>().withData(() -> transactionService.deleteTransaction(id, auth));
@@ -137,6 +143,7 @@ public class TransactionController {
 
         // Lọc giao dịch theo các tiêu chí
         @PostMapping("/filter")
+        @Operation(summary = "Lọc giao dịch theo nhiều tiêu chí nâng cao")
         public ResponseEntity<AbstractResponse<PageResponse<TransactionResponse>>> filterTransactions(
                         @RequestBody TransactionFilterRequest filter,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
@@ -147,11 +154,11 @@ public class TransactionController {
 
         // Chuyển tiền giữa các tài khoản
         @PostMapping("/transfer")
+        @Operation(summary = "Chuyển tiền nội bộ giữa 2 tài khoản")
         public ResponseEntity<AbstractResponse<TransactionResponse>> createTransfer(
                         @Valid @RequestBody TransferRequest request,
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
                 return new AbstractResponse<TransactionResponse>()
                                 .withData(() -> transactionService.createTransfer(request, auth));
         }
-
 }
