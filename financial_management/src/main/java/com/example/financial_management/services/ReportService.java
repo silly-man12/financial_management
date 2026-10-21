@@ -567,7 +567,7 @@ public class ReportService {
         public List<CategoryDistributionResponse> getCategoryDistributionReport(
                         Auth auth, String startDateStr, String endDateStr, Integer type) {
                 User user = getUser(auth);
-                int txType = (type != null) ? type : TransactionType.EXPENSE;
+                int txType = (type != null && type != 0) ? type : TransactionType.EXPENSE;
 
                 LocalDateTime[] dateRange = DateTimeUtils.resolveDateRange(null, startDateStr, endDateStr);
                 LocalDateTime startDateTime = dateRange[0];

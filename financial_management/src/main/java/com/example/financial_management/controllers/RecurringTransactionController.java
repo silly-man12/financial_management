@@ -29,7 +29,7 @@ public class RecurringTransactionController {
 
         @GetMapping
         @Operation(summary = "Lấy danh sách giao dịch định kỳ (hỗ trợ lọc theo status)")
-        public ResponseEntity<AbstractResponse<List<RecurringTransactionResponse>>> getAll(
+        public ResponseEntity<AbstractResponse<List<RecurringTransactionResponse>>> getAllRecurringTransactions(
                         @Parameter(hidden = true) @AuthenticationPrincipal Auth auth,
                         @RequestParam(value = "status", required = false) Integer status) {
                 return new AbstractResponse<List<RecurringTransactionResponse>>()

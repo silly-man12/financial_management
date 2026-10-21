@@ -34,7 +34,7 @@ flowchart TD
     end
 
     subgraph L3["3. Tầng Điều Khiển API (REST Controllers)"]
-        ApiControllers["12 REST Controllers<br/>(/auth, /accounts, /transactions, /budgets, /reports...)"]:::controller
+        ApiControllers["14 REST Controllers<br/>(/auth, /accounts, /transactions, /budgets, /reports, /categories, /transaction-types...)"]:::controller
     end
 
     subgraph L4["4. Tầng Nghiệp Vụ & Tác Vụ Nền (Business Logic & Workers)"]
@@ -77,7 +77,7 @@ flowchart TD
 |---|---|---|
 | **1. Client & Inbound Layer** | Vue.js App, Telegram App, Webhook Providers | Điểm tương tác của người dùng và các bên thứ ba gửi dữ liệu vào hệ thống. |
 | **2. Security & Gateway** | Spring Security 6, `AuthFilter`, `WebConfig` (CORS) | Chặn lọc truy cập trái phép, giải mã JWT Token, kiểm tra quyền hạn, cấu hình CORS cho phép Vue App (`localhost:5173`) kết nối an toàn. |
-| **3. REST Controller Layer** | 12 Controllers (`TransactionController`, `AccountController`,...) | Tiếp nhận HTTP Request, validate dữ liệu đầu vào (Bean Validation), đóng gói phản hồi chuẩn `AbstractResponse<T>`. |
+| **3. REST Controller Layer** | 14 Controllers (`TransactionController`, `AccountController`, `CategoryController`, `TransactionTypeController`...) | Tiếp nhận HTTP Request, validate dữ liệu đầu vào (Bean Validation), đóng gói phản hồi chuẩn `AbstractResponse<T>`. |
 | **4. Business Logic & Workers** | Services, JPA Specifications, Cronjobs, Telegram Engine | Xử lý logic nghiệp vụ tài chính, đảm bảo giao dịch nguyên tử `@Transactional`, chạy ngầm cronjob định kỳ và điều phối bot Telegram. |
 | **5. Persistence & Storage** | Spring Data JPA Repositories, MS SQL Server, Disk Storage | Truy vấn dữ liệu hiệu năng cao, đảm bảo toàn vẹn dữ liệu sao kê, lưu trữ hình ảnh hóa đơn tại thư mục `images/`. |
 | **6. External Integrations** | Gemini AI, Gmail SMTP, Exchange Rate API | Mở rộng tính năng tự động: đọc hóa đơn qua AI, gửi mail xác thực và cập nhật tỷ giá thị trường. |
@@ -209,6 +209,21 @@ flowchart TD
   - **Mode `overwrite`**: Gỡ khóa ngoại chéo (`transfer_id`, `transaction_id`), xóa sạch dữ liệu cũ theo quan hệ cha - con và chèn mới toàn bộ dữ liệu sạch.
   - **Mode `merge` (Upsert)**: Kiểm tra bản ghi tồn tại theo ID. Nếu đã có $\rightarrow$ cập nhật lại thời gian tạo/sửa chuẩn và thông tin mới nhất; nếu chưa có $\rightarrow$ chèn mới.
 
+#### 6. Chuyển Đổi Danh Mục & Loại Giao Dịch Sang Database (Block ID Migration) & Tối Ưu Swagger:
+- [x] **Chuẩn hóa Block ID số học**:
+  - Chuyển đổi toàn diện từ hằng số hardcode sang các bảng CSDL `categories` và `transaction_types`.
+  - Phân dải ID theo Block khoa học: Chi tiêu (`101..112`), Thu nhập (`201..205`), Chuyển khoản & Tiết kiệm (`301..302`); `1: EXPENSE`, `2: INCOME`, `3: TRANSFER` cho `TransactionType`.
+  - Thiết lập ràng buộc khóa ngoại (Foreign Key constraints) toàn vẹn dữ liệu cho `transactions`, `budgets`, `recurring_transactions`.
+- [x] **RESTful APIs & Caching**:
+  - Xây dựng `CategoryController` (`/categories`) và `TransactionTypeController` (`/transaction-types`) kèm Spring Cache (`@Cacheable`) truy xuất siêu tốc.
+  - Cấu hình Spring Security mở quyền công khai cho các endpoint danh mục và loại giao dịch.
+- [x] **Khắc phục triệt để lỗi xung đột Swagger UI (`operationId` collision)**:
+  - Khắc phục lỗi Swagger UI execute sai API (ví dụ `/transactions/all` chuyển hướng sang `/tags`) do trùng tên method `getAll` ở nhiều Controller.
+  - Triển khai `GlobalOpenApiCustomizer` trong `SwaggerConfig.java` tự động gán `operationId` duy nhất toàn cục theo mẫu `[httpMethod]_[cleanPath]`.
+- [x] **Tối ưu hóa NLP Telegram Message Parser**:
+  - Phân tách rành mạch Quà biếu / Tặng mang đi cho (`Category.PRESENT = 111` - Chi tiêu) vs Thưởng / Quà nhận về (`Category.GIFTS = 204` - Thu nhập), nhận diện chính xác các câu ghi chép tự nhiên như `1500k bieu me mb`, `300k tang vo`, `500k li xi chau`.
+  - Loại bỏ nhầm lẫn từ ngữ đa nghĩa (từ `di lai` vào Di chuyển `Category.TRANSPORT = 102` thay vì nhầm vào Lãi đầu tư `Category.INVESTMENTS = 203`).
+
 ---
 
 ### 🟡 GIAI ĐOẠN 3: Tích Hợp Webhooks Ngân Hàng & Dịch Vụ AI
@@ -309,7 +324,8 @@ sequenceDiagram
 | Phiên Bản | Mốc Thời Gian | Trọng Tâm Bàn Giao Backend |
 |---|:---:|---|
 | **v1.0.0** | 10/2026 | **Hoàn thành Core Backend & Telegram Assistant**: 12 Controllers, JWT Auth, MS SQL Server, PDF Report, Cronjob tỷ giá & định kỳ, Telegram Bot toàn năng (bóc tách #tag, báo cáo 21:30, cảnh báo ngân sách $\ge 90\%$, OTP linking, Whitelist Guard). |
-| **v1.1.0** *(Hiện tại)* | 10/2026 | **Tối ưu hóa Vue Client, Cashflow Forecast & 1-Click Backup**: CORS `5173`, Global Error Handler, API ảnh tĩnh, **Dự báo dòng tiền cá nhân** (`/cashflow/forecast`), **Sao lưu & Khôi phục 1-click** (`/backup/export`, `/backup/validate`, `/backup/import` qua `JdbcTemplate`), nâng cấp OpenAPI 2.8.5. |
+| **v1.1.0** | 10/2026 | **Tối ưu hóa Vue Client, Cashflow Forecast & 1-Click Backup**: CORS `5173`, Global Error Handler, API ảnh tĩnh, **Dự báo dòng tiền cá nhân** (`/cashflow/forecast`), **Sao lưu & Khôi phục 1-click** (`/backup/export`, `/backup/validate`, `/backup/import` qua `JdbcTemplate`), nâng cấp OpenAPI 2.8.5. |
+| **v1.2.0** *(Hiện tại)* | 10/2026 | **Block ID Database Migration & NLP Telegram Refinement**: Chuyển đổi toàn diện `TransactionType` (`1, 2, 3`) và `Category` (`1xx, 2xx, 3xx`) sang CSDL, thiết lập FK toàn vẹn dữ liệu, thêm API `/categories` và `/transaction-types`, sửa lỗi xung đột Swagger UI `operationId`, hoàn thiện NLP bóc tách quà tặng, biếu mẹ, lì xì và tránh nhầm lẫn ngữ cảnh. |
 | **v2.0.0** | 04/2027 | **Tự động hóa & AI Engine**: Endpoint Bank Webhook (SePay/Casso), Gemini Flash Vision OCR đọc hóa đơn, Speech-to-Text tin nhắn thoại. |
 | **v2.5.0** | 08/2027 | **Net Worth & Investment APIs**: Entity & API quản lý Vàng, Sổ tiết kiệm kỳ hạn, Lãi suất, Crawl giá thị trường, Biểu đồ Net Worth. |
 | **v3.0.0** | 11/2027 | **Production Ready & Self-Hosted**: Redis Caching, Flyway DB Migration, Docker Compose trọn bộ, Auto Backup database mã hóa lên Cloud. |

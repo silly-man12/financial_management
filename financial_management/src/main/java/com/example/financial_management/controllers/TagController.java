@@ -30,14 +30,14 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/tags")
 @RequiredArgsConstructor
-@Tag(name = "Tag API", description = "Tag Management for Transactions")
+@Tag(name = "Tag API", description = "Quản lý nhãn dán / thẻ Tag cho giao dịch")
 public class TagController {
 
         private final TagService tagService;
 
         @GetMapping
         @Operation(summary = "Lấy tất cả các thẻ tag của người dùng")
-        public ResponseEntity<AbstractResponse<List<TagResponse>>> getAll(
+        public ResponseEntity<AbstractResponse<List<TagResponse>>> getAllTags(
                         @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
                 return new AbstractResponse<List<TagResponse>>()
                                 .withData(() -> tagService.getAllTags(auth));
@@ -45,7 +45,7 @@ public class TagController {
 
         @GetMapping("/all")
         @Operation(summary = "Lấy tất cả các thẻ tag của người dùng (/all)")
-        public ResponseEntity<AbstractResponse<List<TagResponse>>> getAllAlias(
+        public ResponseEntity<AbstractResponse<List<TagResponse>>> getAllTagsAlias(
                         @AuthenticationPrincipal @Parameter(hidden = true) Auth auth) {
                 return new AbstractResponse<List<TagResponse>>()
                                 .withData(() -> tagService.getAllTags(auth));

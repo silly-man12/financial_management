@@ -71,7 +71,7 @@ public class ReportController {
     public ResponseEntity<AbstractResponse<List<CategoryDistributionResponse>>> getCategoryDistribution(
             @Parameter(description = "Ngày bắt đầu (yyyy-MM-dd hoặc yyMMdd)", example = "2026-08-01") @RequestParam(required = false) String startDate,
             @Parameter(description = "Ngày kết thúc (yyyy-MM-dd hoặc yyMMdd)", example = "2026-08-31") @RequestParam(required = false) String endDate,
-            @Parameter(description = "Loại giao dịch: 0 (Chi tiêu), 1 (Thu nhập)", example = "0") @RequestParam(required = false, defaultValue = "0") Integer type,
+            @Parameter(description = "Loại giao dịch: 1 (Chi tiêu), 2 (Thu nhập)", example = "1") @RequestParam(required = false, defaultValue = "1") Integer type,
             @Parameter(hidden = true) @AuthenticationPrincipal Auth auth) {
         return new AbstractResponse<List<CategoryDistributionResponse>>()
                 .withData(() -> reportService.getCategoryDistributionReport(auth, startDate, endDate, type));

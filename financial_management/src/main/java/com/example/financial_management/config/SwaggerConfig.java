@@ -34,18 +34,22 @@ public class SwaggerConfig {
     }
 
     /**
-     * Tùy chỉnh rule áp dụng security
+     * Tùy chỉnh rule áp dụng security và gán operationId duy nhất để tránh xung đột trên Swagger UI
      */
     @Bean
     public GlobalOpenApiCustomizer globalOpenApiCustomizer() {
         return openAPi -> {
             openAPi.getPaths().forEach((path, pathItem) -> {
-                pathItem.readOperations().forEach(operation -> {
+                pathItem.readOperationsMap().forEach((httpMethod, operation) -> {
+                    // Đảm bảo operationId luôn là duy nhất trên toàn bộ Swagger UI để tránh lỗi xung đột sự kiện click Execute
+                    String cleanPath = path.replaceAll("[^a-zA-Z0-9_]", "_");
+                    operation.setOperationId(httpMethod.name().toLowerCase() + cleanPath);
+
                     boolean isPublicEndpoint = isPublicEndpoint(path);
                     if (!isPublicEndpoint) {
                         operation.addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME));
                         addAuthenticationDescription(operation, true);
-                    }else {
+                    } else {
                         addAuthenticationDescription(operation, false);
                     }
                 });
@@ -57,7 +61,7 @@ public class SwaggerConfig {
         String currentDescription = operation.getDescription() != null ? operation.getDescription() : "";
         String authDescription;
 
-        if(requireAuth) {
+        if (requireAuth) {
             authDescription = "\n\n Authentication required: Use the 'Authorize' button to enter your JWT token.\n";
         } else {
             authDescription = "\n\n No authentication required.";
@@ -67,12 +71,12 @@ public class SwaggerConfig {
     }
 
     private boolean isPublicEndpoint(String path) {
-        if(path == null) {
+        if (path == null) {
             return false;
-        } 
+        }
 
-        for(String publicPath : SecurityConfig.PUBLIC_ENDPOINTS) {
-            if(antPathMatcher.match(path, publicPath)) {
+        for (String publicPath : SecurityConfig.PUBLIC_ENDPOINTS) {
+            if (antPathMatcher.match(path, publicPath)) {
                 return true;
             }
         }

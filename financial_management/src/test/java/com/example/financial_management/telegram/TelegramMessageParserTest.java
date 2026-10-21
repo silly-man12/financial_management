@@ -30,7 +30,10 @@ class TelegramMessageParserTest {
         Account momo = new Account();
         momo.setName("MoMo");
 
-        testAccounts = List.of(vcb, cash, momo);
+        Account mb = new Account();
+        mb.setName("MB Bank");
+
+        testAccounts = List.of(vcb, cash, momo, mb);
     }
 
     @Test
@@ -156,5 +159,81 @@ class TelegramMessageParserTest {
         assertEquals(2, res.getTags().size());
         assertTrue(res.getTags().contains("banbe"));
         assertTrue(res.getTags().contains("cuoituan"));
+    }
+
+    @Test
+    @DisplayName("Nhận diện danh mục PRESENT (Quà tặng, mừng cưới, biếu mẹ, biếu bố - EXPENSE)")
+    void testPresentCategory() {
+        // Đúng câu của người dùng: 1500k bieu me mb
+        TelegramParsedTransaction resUser = parser.parse("1500k bieu me mb", testAccounts);
+        assertTrue(resUser.isSuccess());
+        assertEquals(0, new BigDecimal("1500000").compareTo(resUser.getAmount()));
+        assertEquals(Category.PRESENT, resUser.getCategory());
+        assertEquals(TransactionType.EXPENSE, resUser.getType());
+        assertEquals("MB Bank", resUser.getAccountKeyword());
+        assertEquals("Bieu me", resUser.getDescription());
+
+        TelegramParsedTransaction res1 = parser.parse("mung cuoi ban 500k", testAccounts);
+        assertTrue(res1.isSuccess());
+        assertEquals(0, new BigDecimal("500000").compareTo(res1.getAmount()));
+        assertEquals(Category.PRESENT, res1.getCategory());
+        assertEquals(TransactionType.EXPENSE, res1.getType());
+
+        TelegramParsedTransaction res2 = parser.parse("500k phong bi sinh nhat", testAccounts);
+        assertTrue(res2.isSuccess());
+        assertEquals(Category.PRESENT, res2.getCategory());
+        assertEquals(TransactionType.EXPENSE, res2.getType());
+
+        TelegramParsedTransaction res3 = parser.parse("bieu bo 500k vcb", testAccounts);
+        assertTrue(res3.isSuccess());
+        assertEquals(Category.PRESENT, res3.getCategory());
+        assertEquals(TransactionType.EXPENSE, res3.getType());
+        assertEquals("Vietcombank", res3.getAccountKeyword());
+
+        TelegramParsedTransaction res4 = parser.parse("300k tang vo", testAccounts);
+        assertTrue(res4.isSuccess());
+        assertEquals(Category.PRESENT, res4.getCategory());
+        assertEquals(TransactionType.EXPENSE, res4.getType());
+
+        TelegramParsedTransaction res5 = parser.parse("200k li xi chau", testAccounts);
+        assertTrue(res5.isSuccess());
+        assertEquals(Category.PRESENT, res5.getCategory());
+        assertEquals(TransactionType.EXPENSE, res5.getType());
+    }
+
+    @Test
+    @DisplayName("Phân biệt đúng Quà biếu (PRESENT - Chi tiêu) vs Thưởng/Nhận quà (GIFTS - Thu nhập)")
+    void testPresentVsGiftsIncome() {
+        // Chi tiền mang đi biếu
+        TelegramParsedTransaction exp = parser.parse("1500k bieu me", testAccounts);
+        assertEquals(TransactionType.EXPENSE, exp.getType());
+        assertEquals(Category.PRESENT, exp.getCategory());
+
+        // Nhận tiền thưởng/lì xì có dấu + hoặc từ nhận
+        TelegramParsedTransaction inc1 = parser.parse("+1500k bieu me", testAccounts);
+        assertEquals(TransactionType.INCOME, inc1.getType());
+        assertEquals(Category.GIFTS, inc1.getCategory());
+
+        TelegramParsedTransaction inc2 = parser.parse("+500k li xi", testAccounts);
+        assertEquals(TransactionType.INCOME, inc2.getType());
+        assertEquals(Category.GIFTS, inc2.getCategory());
+
+        TelegramParsedTransaction inc3 = parser.parse("duoc me cho 500k", testAccounts);
+        assertEquals(TransactionType.INCOME, inc3.getType());
+        assertEquals(Category.GIFTS, inc3.getCategory());
+
+        // Thưởng công việc tự động là INCOME
+        TelegramParsedTransaction inc4 = parser.parse("1tr thuong tet cty", testAccounts);
+        assertEquals(TransactionType.INCOME, inc4.getType());
+        assertEquals(Category.GIFTS, inc4.getCategory());
+    }
+
+    @Test
+    @DisplayName("Từ khóa 'di lai' không bị nhầm lẫn thành Đầu tư/Lãi mà phải là Di chuyển")
+    void testTransportNotConfusedWithInvestments() {
+        TelegramParsedTransaction res = parser.parse("50k di lai", testAccounts);
+        assertTrue(res.isSuccess());
+        assertEquals(TransactionType.EXPENSE, res.getType());
+        assertEquals(Category.TRANSPORT, res.getCategory());
     }
 }

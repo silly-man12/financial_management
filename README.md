@@ -45,7 +45,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 
 ### 4. 💸 Quản lý Giao dịch (Transactions)
 - **Thu / Chi / Chuyển khoản**:
-  - Ghi nhận khoản Chi (`EXPENSE = 0`), Thu (`INCOME = 1`), Chuyển khoản giữa 2 ví (`TRANSFER = 2`).
+  - Ghi nhận khoản Chi (`EXPENSE = 1`), Thu (`INCOME = 2`), Chuyển khoản giữa 2 ví (`TRANSFER = 3`).
   - Hỗ trợ chuyển tiền nội bộ giữa 2 tài khoản, tự động cập nhật số dư cả ví nguồn và ví đích.
 - **Hóa đơn đính kèm & Thẻ tag**: Tải lên ảnh hóa đơn / biên lai thanh toán (`multipart/form-data`, file tối đa 20MB), tự động sinh đường dẫn ảnh đầy đủ (`imageUrl`) để Vue.js Client hiển thị trực tiếp qua endpoint tĩnh `/images/**`, và gắn nhãn thẻ tag.
 - **Linh hoạt định dạng ngày giờ (Flexible DateTime Deserialization)**: Tự động giải mã đa định dạng thời gian: Chuẩn ISO-8601 UTC có đuôi `Z` và mili-giây (ví dụ: `2026-10-15T18:12:00.000Z` từ `Date.toISOString()` của Vue.js / JavaScript), chuỗi có offset múi giờ (`+07:00`), ISO local datetime (`yyyy-MM-dd'T'HH:mm:ss[.SSS]`), định dạng dấu cách (`yyyy-MM-dd HH:mm:ss`), ngày (`yyyy-MM-dd`) và timestamp số (Epoch milliseconds). Tự động quy đổi chuẩn xác về giờ địa phương Việt Nam (`Asia/Ho_Chi_Minh`).
@@ -58,7 +58,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - Gắn nhiều thẻ tag vào một giao dịch thu chi.
 - Báo cáo và thống kê tổng hợp số tiền thu/chi, số dư ròng và số lượng giao dịch theo từng thẻ tag cụ thể (`/tags/summary`).
 - **Lọc theo khoảng thời gian linh hoạt**: Hỗ trợ tham số `startDate` và `endDate` (tự động nhận diện đa định dạng ngày giờ, hoán đổi hợp lệ nếu ngày bắt đầu lớn hơn ngày kết thúc).
-- **Loại trừ chuyển khoản nội bộ**: Thống kê tag tự động loại trừ giao dịch chuyển khoản (`Category = 16: Transfer`) để phản ánh chính xác thu chi thực tế.
+- **Loại trừ chuyển khoản nội bộ**: Thống kê tag tự động loại trừ giao dịch chuyển khoản (`Category = 301: Transfer`) để phản ánh chính xác thu chi thực tế.
 
 ### 6. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục hoặc gắn thẻ Tag cho tháng/năm.
@@ -104,15 +104,19 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - Liệt kê các khoản chi tiêu có giá trị lớn nhất trong kỳ.
 - **Báo cáo định kỳ & So sánh**:
   - Báo cáo chi tiết theo ngày (`/reports/daily`), 12 tháng trong năm (`/reports/monthly`), tổng quan (`/reports/summary`), so sánh tháng này với tháng trước (`/reports/compare`).
-- **Loại trừ giao dịch nội bộ**: Báo cáo tài chính tự động loại trừ Chuyển khoản nội bộ (`Category = 16`) và Trả/thu nợ (`Category = 9`) để đảm bảo số liệu thu nhập và chi phí thực tế không bị tính trùng (double counting).
+- **Loại trừ giao dịch nội bộ**: Báo cáo tài chính tự động loại trừ Chuyển khoản nội bộ (`Category = 301`) và Trả/thu nợ (`Category = 109`) để đảm bảo số liệu thu nhập và chi phí thực tế không bị tính trùng (double counting).
 - **Xuất file PDF**: Tự động tạo và xuất báo cáo tài chính dạng PDF chuyên nghiệp theo tháng và theo năm với iText.
 
 ### 12. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
 - **Ghi chép giao dịch trong 3 giây bằng tin nhắn tự nhiên**:
   - Nhập số tiền linh hoạt: Viết tắt nghìn (`50k`, `45.5k`, `30 nghin`), triệu (`1.5tr`, `2m`, `12.3tr`), tỷ (`1ty`, `1b`), số có dấu phân cách (`32.500`, `127,500`), số nguyên (`32500 banh mi`), số nhỏ `< 1000` tự động hiểu là nghìn (`100 do xang` = 100.000đ), số lẻ kèm đơn vị (`500d keo` = 500đ).
   - Vị trí tự do ở đầu hoặc cuối câu (`50k cf` hoặc `cf 50k`).
-  - Tự động nhận diện danh mục thông minh kèm biểu tượng cảm xúc (Ăn uống 🍜, Di chuyển 🛵, Mua sắm 🛒, Tiện ích 🏠, Y tế 💊...).
-  - Ghi nhận khoản Thu nhập dễ dàng: thêm dấu `+` (`+15tr luong vcb`), từ khóa `thu`, `nhan`, hoặc tự động nhận diện từ khóa thu nhập (`luong`, `thuong`, `lai`...).
+  - Tự động nhận diện danh mục thông minh kèm biểu tượng cảm xúc (Ăn uống 🍜, Di chuyển 🛵, Mua sắm 🛒, Tiện ích 💡, Sức khỏe 💊, Du lịch ✈️, Quà biếu / Tặng 🎁...).
+  - **Phân biệt rành mạch Quà biếu vs Thưởng/Quà**:
+    - Tự động phân loại chính xác các khoản tiền mang đi biếu, tặng, mừng, từ thiện (`Category.PRESENT = 111` - Chi tiêu - Trừ tiền ví): `1500k bieu me mb`, `300k tang vo`, `500k mung cuoi`, `200k li xi chau`.
+    - Phân tách rõ ràng với các khoản tiền thưởng, nhận quà (`Category.GIFTS = 204` - Thu nhập - Cộng tiền ví): `+1500k bieu me`, `+500k li xi`, `duoc me cho 500k`, `1tr thuong tet`.
+  - **Tránh nhầm lẫn ngữ cảnh thông minh**: Xử lý từ ngữ đa nghĩa trong tiếng Việt (ví dụ `50k di lai` được xếp vào Di chuyển `Category.TRANSPORT = 102` thay vì nhầm sang Lãi đầu tư `Category.INVESTMENTS = 203`).
+  - Ghi nhận khoản Thu nhập dễ dàng: thêm dấu `+` (`+15tr luong vcb`), từ khóa `thu`, `nhan`, `duoc`, hoặc tự động nhận diện từ khóa thu nhập đặc trưng (`luong`, `thuong`, `co tuc`, `lai tiet kiem`...).
   - **Bóc tách thẻ hashtag `#tag` (Smart Syntax)**: Tự động trích xuất hashtag trong câu (ví dụ: `xang 70k #di-lai`, `cf 35k #cafe`, `an toi 150k #an-uong #tiec-tung`), tự động phân giải/tạo thẻ tag, lưu vào giao dịch và hiển thị thẻ `🏷️ Thẻ: #tag` trong thông báo phản hồi của bot.
   - **Tự động đối soát và phản hồi trạng thái ngân sách**: Khi ghi chép chi tiêu có gắn thẻ `#tag` (hoặc chi tiêu danh mục chung), bot tự động tính toán lại và hiển thị số tiền còn lại và tỷ lệ % ngân sách chiếm dụng ngay trong tin nhắn xác nhận (ví dụ: `📊 Ngân sách Ăn uống 🍜 (Thẻ #cafe): Còn lại 50.000 ₫ (chiếm 95.0%)`).
 - **Chỉ định ví nguồn thông minh & Ràng buộc an toàn**:
@@ -174,6 +178,18 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - **Chế độ `merge` (Upsert)**: Đối soát theo ID bản ghi. Nếu đã có trong DB $\rightarrow$ cập nhật lại thông tin mới nhất và thời gian tạo chuẩn; nếu chưa có $\rightarrow$ chèn mới.
   - **Kiến trúc Native JDBC (`JdbcTemplate`)**: Tách biệt 100% khỏi vòng đời Hibernate Entity (`@GeneratedValue`), giải quyết dứt điểm các ngoại lệ `detached entity passed to persist`, `OptimisticLockException` và `UnexpectedRollbackException`.
   - **Bảo toàn thời gian gốc**: Khôi phục chính xác 100% mốc thời gian tạo (`createdAt`) và cập nhật (`updatedAt`) ban đầu của các giao dịch, không bị JPA `@PrePersist` đè thành ngày hôm nay.
+
+### 16. 📂 Quản lý Danh mục Thu / Chi từ Cơ sở Dữ liệu (Database-driven Categories)
+- **Chuẩn hóa Block ID số học**: Chuyển đổi toàn diện từ hằng số hardcode sang các bảng CSDL (`categories`, `transaction_types`) với bộ Block ID số trực quan:
+  - **Chi tiêu (`101..112`)**: `101: FOOD` (Ăn uống), `102: TRANSPORT` (Di chuyển)... `110: TRAVELING` (Du lịch), `111: PRESENT` (Quà biếu / Tặng), `112: OTHER_EXPENSE` (Chi tiêu khác).
+  - **Thu nhập (`201..205`)**: `201: SALARY` (Lương), `202: BUSINESS` (Kinh doanh), `203: INVESTMENTS` (Đầu tư/Lãi), `204: GIFTS` (Thưởng/Quà), `205: OTHER_INCOME` (Thu nhập khác).
+  - **Chuyển khoản & Tiết kiệm (`301..302`)**: `301: TRANSFER` (Chuyển khoản nội bộ), `302: SAVINGS` (Tiết kiệm).
+- **Toàn vẹn khóa ngoại (Foreign Key)**: Thiết lập ràng buộc FK chặt chẽ ở mức CSDL giữa `transactions`, `budgets`, `recurring_transactions` với bảng `categories`.
+- **API Danh mục (`/categories`)**: Cung cấp API công khai tra cứu danh mục (`GET /categories`, `GET /categories/{id}`), hỗ trợ lọc theo loại giao dịch (`?typeId=1|2|3`), tích hợp Spring Cache (`@Cacheable`) giảm tải triệt để cho database.
+
+### 17. 🔀 Quản lý Loại Giao dịch (Transaction Types)
+- Chuẩn hóa loại giao dịch lưu trữ CSDL trong bảng `transaction_types` với ID số tự nhiên: `1: EXPENSE` (Chi tiêu), `2: INCOME` (Thu nhập), `3: TRANSFER` (Chuyển khoản).
+- Cung cấp RESTful API công khai (`GET /transaction-types`, `GET /transaction-types/{id}`) kèm Spring Cache.
 
 ---
 
@@ -506,6 +522,18 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 | `POST` | `/backup/validate` | `multipart/form-data` | Authenticated | **Thẩm định file backup trước khi khôi phục**: Kiểm tra tính hợp lệ của file backup JSON, phiên bản schema (`1.0`), email chủ sở hữu và thống kê chi tiết số lượng bản ghi từng bảng để người dùng kiểm tra trước khi bấm nạp. |
 | `POST` | `/backup/import?mode={overwrite\|merge}` | `multipart/form-data` | Authenticated | **Khôi phục dữ liệu siêu tốc & an toàn**: Nạp dữ liệu từ file backup JSON qua `JdbcTemplate` độc lập ORM, bảo toàn 100% thời gian tạo (`createdAt`) và sửa (`updatedAt`) gốc. Hỗ trợ 2 chế độ: `overwrite` (xóa sạch toàn bộ dữ liệu cũ của user rồi nạp mới) hoặc `merge` (upsert dữ liệu, cập nhật lại ngày tạo cho bản ghi đã tồn tại). |
 
+### 16. Danh mục Thu / Chi (`/categories`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/categories` | Public | Lấy danh sách tất cả các danh mục đang hoạt động (hỗ trợ lọc `?typeId={1\|2\|3}`) |
+| `GET` | `/categories/{id}` | Public | Lấy thông tin chi tiết một danh mục theo ID |
+
+### 17. Loại Giao dịch (`/transaction-types`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/transaction-types` | Public | Lấy danh sách toàn bộ loại giao dịch (Chi tiêu, Thu nhập, Chuyển khoản) |
+| `GET` | `/transaction-types/{id}` | Public | Lấy thông tin chi tiết loại giao dịch theo ID |
+
 ---
 
 ## 🚨 Chuẩn hóa Phản hồi & Xử lý Lỗi (Error Handling)
@@ -580,35 +608,35 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
 
 ## 🔢 Bảng tra cứu Hằng số (Constants Reference)
 
-### 1. Phân loại Danh mục (`Category`)
+### 1. Phân loại Danh mục (`Category` — Phân dải theo Block 1xx, 2xx, 3xx)
 | ID | Tên danh mục | Phân loại | Ghi chú |
 |---|---|---|---|
-| `1` | Food (Ăn uống) | Expense | Chi tiêu thiết yếu |
-| `2` | Transport (Di chuyển) | Expense | Chi tiêu thiết yếu |
-| `3` | Entertainment (Giải trí) | Expense | Chi tiêu cá nhân |
-| `4` | Utilities (Hóa đơn / Tiện ích) | Expense | Điện thoại, điện, nước, internet... |
-| `5` | Healthcare (Y tế & Sức khỏe) | Expense | Thuốc men, khám sức khỏe... |
-| `6` | Education (Giáo dục) | Expense | Học phí, sách vở, khóa học... |
-| `7` | Shopping (Mua sắm) | Expense | Quần áo, thiết bị... |
-| `8` | Housing (Nhà ở) | Expense | Tiền thuê nhà, bảo trì... |
-| `9` | Debt (Trả nợ / Thu nợ) | Expense / Debt | **Được tự động loại trừ khỏi báo cáo thu/chi thông thường** |
-| `10`| Other Expense (Chi tiêu khác) | Expense | Các khoản chi phí khác |
-| `18`| Traveling (Du lịch) | Expense | Chi tiêu du lịch, vé máy bay, khách sạn |
-| `19`| Present (Quà biếu / Tặng) | Expense | Quà biếu, quà sinh nhật, cưới hỏi, mừng lễ, từ thiện... |
-| `11`| Salary (Tiền lương) | Income | Thu nhập cố định |
-| `12`| Business (Kinh doanh) | Income | Thu nhập từ buôn bán, kinh doanh |
-| `13`| Investments (Đầu tư) | Income | Cổ phiếu, lợi nhuận đầu tư |
-| `14`| Gifts (Quà tặng) | Income | Tiền mừng, quà biếu |
-| `15`| Other Income (Thu nhập khác) | Income | Các khoản thu khác |
-| `16`| Transfer (Chuyển khoản nội bộ) | Transfer | **Chuyển giữa 2 ví, loại trừ khỏi báo cáo thu/chi để tránh trùng lặp** |
-| `17`| Savings (Tiết kiệm / Góp quỹ) | Savings | Nạp hoặc rút từ mục tiêu tiết kiệm |
+| `101`| Food (Ăn uống) | Expense | Chi tiêu thiết yếu 🍜 |
+| `102`| Transport (Di chuyển) | Expense | Chi tiêu thiết yếu 🛵 |
+| `103`| Entertainment (Giải trí) | Expense | Chi tiêu cá nhân 🎮 |
+| `104`| Utilities (Hóa đơn / Tiện ích) | Expense | Điện thoại, điện, nước, internet... 💡 |
+| `105`| Healthcare (Y tế & Sức khỏe) | Expense | Thuốc men, khám sức khỏe... 💊 |
+| `106`| Education (Giáo dục) | Expense | Học phí, sách vở, khóa học... 📚 |
+| `107`| Shopping (Mua sắm) | Expense | Quần áo, thiết bị... 🛍️ |
+| `108`| Housing (Nhà ở) | Expense | Tiền thuê nhà, bảo trì... 🏠 |
+| `109`| Debt (Trả nợ / Thu nợ) | Expense / Debt | **Được tự động loại trừ khỏi báo cáo thu/chi thông thường** 💳 |
+| `110`| Traveling (Du lịch) | Expense | Chi tiêu du lịch, vé máy bay, khách sạn ✈️ |
+| `111`| Present (Quà biếu / Tặng) | Expense | Quà biếu, quà sinh nhật, cưới hỏi, mừng lễ, từ thiện... 🎁 |
+| `112`| Other Expense (Chi tiêu khác) | Expense | Các khoản chi phí khác 📦 |
+| `201`| Salary (Tiền lương) | Income | Thu nhập cố định 💵 |
+| `202`| Business (Kinh doanh) | Income | Thu nhập từ buôn bán, kinh doanh 💼 |
+| `203`| Investments (Đầu tư) | Income | Cổ phiếu, lợi nhuận đầu tư 📈 |
+| `204`| Gifts (Quà tặng) | Income | Tiền mừng, quà biếu 🎁 |
+| `205`| Other Income (Thu nhập khác) | Income | Các khoản thu khác 💰 |
+| `301`| Transfer (Chuyển khoản nội bộ) | Transfer | **Chuyển giữa 2 ví, loại trừ khỏi báo cáo thu/chi để tránh trùng lặp** 🔄 |
+| `302`| Savings (Tiết kiệm / Góp quỹ) | Savings | Nạp hoặc rút từ mục tiêu tiết kiệm 🏦 |
 
 ### 2. Loại Giao dịch (`TransactionType`)
 | ID | Mã loại | Mô tả hành vi số dư ví |
 |---|---|---|
-| `0` | `EXPENSE` | Chi tiêu (Trừ tiền từ ví) |
-| `1` | `INCOME` | Thu nhập (Cộng tiền vào ví) |
-| `2` | `TRANSFER` | Chuyển khoản nội bộ (Trừ ví nguồn, cộng ví đích) |
+| `1` | `EXPENSE` | Chi tiêu (Trừ tiền từ ví) |
+| `2` | `INCOME` | Thu nhập (Cộng tiền vào ví) |
+| `3` | `TRANSFER` | Chuyển khoản nội bộ (Trừ ví nguồn, cộng ví đích) |
 
 ### 3. Trạng thái Hoạt động (`Status`)
 | ID | Mã trạng thái | Áp dụng cho |
@@ -671,9 +699,9 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
 
 1. **Loại trừ Giao dịch Nội bộ & Nợ trong Báo cáo Doanh thu - Chi phí & Thống kê Tag**:
    - Các truy vấn tính toán Tổng Thu Nhập và Tổng Chi Tiêu trong hệ thống báo cáo tài chính (`ReportService` & `TransactionRepository`) luôn áp dụng điều kiện loại trừ:
-     $$\text{category} \notin (9, 16)$$
-   - Tương tự, thống kê tổng hợp theo thẻ tag (`TagService` & `TransactionRepository.sumTagStatsByUserIdAndDateRange`) cũng tự động loại trừ giao dịch chuyển khoản nội bộ (`category \ne 16: Transfer`).
-   - **Lý do**: Chuyển tiền giữa các ví cá nhân (`Category = 16: Transfer`) và Trả/Thu nợ (`Category = 9: Debt`) bản chất là luân chuyển dòng tiền giữa các tài sản, không phải là chi phí sinh hoạt hay nguồn thu nhập thuần túy. Việc loại trừ này giúp ngăn chặn hoàn toàn hiện tượng tính trùng (double-counting) và đảm bảo các chỉ số KPI, tỷ lệ tiết kiệm (Savings Rate) cũng như báo cáo thẻ tag luôn chính xác 100%.
+     $$\text{category} \notin (109, 301)$$
+   - Tương tự, thống kê tổng hợp theo thẻ tag (`TagService` & `TransactionRepository.sumTagStatsByUserIdAndDateRange`) cũng tự động loại trừ giao dịch chuyển khoản nội bộ (`category \ne 301: Transfer`).
+   - **Lý do**: Chuyển tiền giữa các ví cá nhân (`Category = 301: Transfer`) và Trả/Thu nợ (`Category = 109: Debt`) bản chất là luân chuyển dòng tiền giữa các tài sản, không phải là chi phí sinh hoạt hay nguồn thu nhập thuần túy. Việc loại trừ này giúp ngăn chặn hoàn toàn hiện tượng tính trùng (double-counting) và đảm bảo các chỉ số KPI, tỷ lệ tiết kiệm (Savings Rate) cũng như báo cáo thẻ tag luôn chính xác 100%.
 
 2. **Cơ chế Giao dịch Nguyên tử (ACID Transactional)**:
    - Các nghiệp vụ luân chuyển tiền (Tạo giao dịch, Chuyển khoản, Nạp/Rút quỹ tiết kiệm, Trả nợ) được đóng gói trong `@Transactional`. Nếu xảy ra lỗi ở bất kỳ bước nào, toàn bộ trạng thái sẽ tự động Rollback, đảm bảo số dư ví không bao giờ bị lệch.
@@ -725,4 +753,3 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
    - **Bảo vệ Phân quyền & Loại trừ Lỗ hổng IDOR trên API Telegram**:
      - Tất cả các endpoint quản lý trạng thái, tạo mã OTP, hủy kết nối và cấu hình thông báo (`/telegram/**`) đều được bảo vệ bằng JWT Token (`@AuthenticationPrincipal Auth`).
      - Endpoint giả lập `/telegram/simulate` được ràng buộc chặt chẽ với định danh tài khoản đang đăng nhập; chỉ tài khoản `ROLE_ADMIN` mới có quyền giả lập cho email khác, ngăn ngừa hoàn toàn nguy cơ thao túng dữ liệu trái phép.
-
