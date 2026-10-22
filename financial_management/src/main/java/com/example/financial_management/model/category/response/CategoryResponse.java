@@ -18,6 +18,7 @@ public class CategoryResponse {
     private String name;
     private String nameVi;
     private String icon;
+    private String color;
     private boolean isSystem;
     private boolean isActive;
     private Integer displayOrder;

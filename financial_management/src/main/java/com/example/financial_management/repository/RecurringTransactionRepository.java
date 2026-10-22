@@ -11,6 +11,8 @@ import com.example.financial_management.entity.RecurringTransaction;
 
 public interface RecurringTransactionRepository extends JpaRepository<RecurringTransaction, UUID> {
 
+    boolean existsByCategory(int category);
+
     List<RecurringTransaction> findByStatus(int status);
 
     List<RecurringTransaction> findAllByUserIdOrderByCreatedAtDesc(UUID userId);

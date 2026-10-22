@@ -60,18 +60,28 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Lọc theo khoảng thời gian linh hoạt**: Hỗ trợ tham số `startDate` và `endDate` (tự động nhận diện đa định dạng ngày giờ, hoán đổi hợp lệ nếu ngày bắt đầu lớn hơn ngày kết thúc).
 - **Loại trừ chuyển khoản nội bộ**: Thống kê tag tự động loại trừ giao dịch chuyển khoản (`Category = 301: Transfer`) để phản ánh chính xác thu chi thực tế.
 
-### 6. 📊 Ngân sách Chi tiêu (Budgets)
+### 6. 🗂️ Quản lý Danh mục & Phân loại Thu Chi (Categories)
+- **Chuyển đổi toàn diện sang CSDL**: Đưa toàn bộ danh mục từ enum/constant mã nguồn vào bảng cơ sở dữ liệu `categories`, hỗ trợ đa ngôn ngữ (tên chuẩn tiếng Anh `name` và tên hiển thị tiếng Việt `nameVi`).
+- **Phân dải Block ID số học khoa học**: ID được chia theo dải số chuyên biệt: Chi tiêu (`101..199`), Thu nhập (`201..299`), Chuyển khoản & Tiết kiệm (`301..399`). Tự động tìm ID trống tiếp theo trong dải (`findMaxIdInRange`) khi người dùng thêm mới danh mục tùy chỉnh.
+- **Biểu tượng (Icon) & Màu sắc (Color)**: Mỗi danh mục được chuẩn hóa với mã biểu tượng Bootstrap Icons (`icon`, ví dụ: `bi-fork-knife`, `bi-car-front-fill`, `bi-cash-coin`) và mã màu hiển thị Hex (`color`, ví dụ: `#FF6384`, `#2ECC71`), giúp UI/UX giao dịch và ngân sách trực quan, hiện đại.
+- **Trọn bộ RESTful API CRUD**: Hỗ trợ xem danh sách (lọc theo loại giao dịch `typeId`, trạng thái hoạt động `includeInactive`), xem chi tiết, tạo mới (tự sinh mã `code` từ tên), cập nhật thông tin, chuyển đổi trạng thái Bật/Tạm ẩn (`/status`) và xóa an toàn.
+- **Cơ chế An toàn Dữ liệu Kép (Safe Delete Guard)**:
+  - Chặn xóa tuyệt đối đối với 19 danh mục hệ thống cốt lõi (`isSystem = true` hoặc ID $\le 302$).
+  - Nếu danh mục tùy biến đã từng phát sinh giao dịch sao kê, ngân sách hoặc giao dịch định kỳ, hệ thống tự động chuyển sang **xóa mềm (vô hiệu hóa `isActive = false`)** để bảo toàn lịch sử sổ sách tài chính. Chỉ xóa cứng khỏi DB khi danh mục hoàn toàn chưa có liên kết.
+- **Tự động đồng bộ & Caching**: Tự động khởi tạo và đồng bộ 19 danh mục mặc định qua `CategoryDataInitializer` khi ứng dụng khởi chạy; tự động dọn dẹp bộ nhớ đệm Spring Cache (`@CacheEvict(value = "categories", allEntries = true)`) mỗi khi có thao tác thêm, sửa, đổi trạng thái hoặc xóa.
+
+### 7. 📊 Ngân sách Chi tiêu (Budgets)
 - Thiết lập hạn mức chi tiêu theo từng danh mục hoặc gắn thẻ Tag cho tháng/năm.
 - API đối soát ngân sách chi tiết (`/budgets/checking`): Tự động tính toán số tiền đã chi, số dư còn lại, quy đổi USD và tỷ lệ phần trăm đã tiêu (`usedPercentage`) theo từng ngân sách cụ thể để cảnh báo bội chi.
 - API tổng hợp toàn bộ ngân sách (`/budgets/summary`): Tính toán tổng ngân sách, tổng chi tiêu thực tế, số dư còn lại, quy đổi USD và **tỷ lệ phần trăm (%) đã sử dụng trên tổng số tiền của tất cả ngân sách cộng lại**, kèm cờ cảnh báo vượt ngân sách tổng (`isOverBudget`).
 
-### 7. 🔄 Giao dịch Định kỳ (Recurring Transactions)
+### 8. 🔄 Giao dịch Định kỳ (Recurring Transactions)
 - Tự động hóa các khoản chi định kỳ (tiền nhà, hóa đơn điện nước, netflix...) hoặc thu định kỳ (lương, cổ tức...).
 - Chu kỳ hỗ trợ: Hàng ngày (`DAILY`), Hàng tuần (`WEEKLY`), Hàng tháng (`MONTHLY`), Hàng năm (`YEARLY`).
 - **Cronjob tự động**: Quét lúc `00:00:00` mỗi ngày để tự động tạo giao dịch khi tới hạn (`nextExecutionDate`).
 - Hỗ trợ kích hoạt thủ công tức thì (`POST /{id}/execute-now`) hoặc Bật / Tạm dừng quy tắc (`status: 1/2`).
 
-### 8. 🎯 Mục tiêu Tiết kiệm (Saving Goals & Contributions)
+### 9. 🎯 Mục tiêu Tiết kiệm (Saving Goals & Contributions)
 - Lập kế hoạch tài chính cho các mục tiêu (Mua nhà, Mua xe, Du lịch, Quỹ khẩn cấp...).
 - **Lịch sử đóng góp chi tiết (`SavingGoalContribution`)**:
   - Ghi vết từng lần Nạp tiền (`DEPOSIT = 1`) hoặc Rút tiền (`WITHDRAW = 2`).
@@ -79,20 +89,20 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
   - Tự động đổi trạng thái sang Hoàn thành (`COMPLETED = 2`) khi tiến độ đạt $\ge 100\%$.
   - Hỗ trợ hoàn tác một lần đóng góp, tự động khôi phục số dư ví và số tiền tích lũy của mục tiêu.
 
-### 9. 🤝 Sổ nợ & Quản lý Nợ (Debt Management)
+### 10. 🤝 Sổ nợ & Quản lý Nợ (Debt Management)
 - Phân loại rõ ràng: **Đi vay (`BORROW = 1` - Nợ phải trả)** và **Cho vay (`LEND = 2` - Nợ phải thu)**.
 - Quản lý số nợ gốc (`amount`) và số nợ còn lại (`remainingAmount`).
 - Ghi nhận lịch sử từng đợt trả bớt / thu nợ (`DebtPayment`), tự động trừ số nợ còn lại và cập nhật ví tiền.
 - **Tất toán / Miễn nợ (`POST /{id}/settle`)**: Cho phép miễn nợ hoặc chốt sổ mà không gây lệch số dư ví.
 - **Tự động chuyển trạng thái**: Đổi sang `PAID = 2` khi nợ về 0, hoặc `OVERDUE = 3` khi quá hạn hẹn trả (`dueDate`).
 
-### 10. 💱 Tỷ giá Ngoại tệ (Currency Exchange)
+### 11. 💱 Tỷ giá Ngoại tệ (Currency Exchange)
 - Tích hợp dịch vụ theo dõi tỷ giá ngoại tệ USD/VND.
 - Cronjob chạy định kỳ hàng ngày đồng bộ tỷ giá trực tuyến vào cơ sở dữ liệu.
 - Cho phép kích hoạt đồng bộ thủ công qua API (`POST /currency-exchange/sync`).
 - Tự động quy đổi và cung cấp số liệu USD tương ứng trên các báo cáo thống kê (`balanceUsd`, `amountUsd`...).
 
-### 11. 📈 Báo cáo & Phân tích Tài chính Chuyên sâu (Reports & Analytics)
+### 12. 📈 Báo cáo & Phân tích Tài chính Chuyên sâu (Reports & Analytics)
 - **Analytics KPI Dashboard (`/reports/analytics`)**:
   - Trả về 8 chỉ số tài chính chủ chốt: Tổng thu nhập, Tổng chi tiêu, Dòng tiền ròng (Net Savings), Tỷ lệ tiết kiệm (Savings Rate %), Chi tiêu trung bình/ngày, kèm các giá trị quy đổi USD.
   - Chuỗi dữ liệu xu hướng dòng tiền theo ngày (`chartPoints`) phục vụ vẽ biểu đồ đường/cột trực quan.
@@ -107,7 +117,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Loại trừ giao dịch nội bộ**: Báo cáo tài chính tự động loại trừ Chuyển khoản nội bộ (`Category = 301`) và Trả/thu nợ (`Category = 109`) để đảm bảo số liệu thu nhập và chi phí thực tế không bị tính trùng (double counting).
 - **Xuất file PDF**: Tự động tạo và xuất báo cáo tài chính dạng PDF chuyên nghiệp theo tháng và theo năm với iText.
 
-### 12. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
+### 13. 🤖 Bot Telegram Cá Nhân (Ghi chép siêu tốc & Tra cứu nhanh)
 - **Ghi chép giao dịch trong 3 giây bằng tin nhắn tự nhiên**:
   - Nhập số tiền linh hoạt: Viết tắt nghìn (`50k`, `45.5k`, `30 nghin`), triệu (`1.5tr`, `2m`, `12.3tr`), tỷ (`1ty`, `1b`), số có dấu phân cách (`32.500`, `127,500`), số nguyên (`32500 banh mi`), số nhỏ `< 1000` tự động hiểu là nghìn (`100 do xang` = 100.000đ), số lẻ kèm đơn vị (`500d keo` = 500đ).
   - Vị trí tự do ở đầu hoặc cuối câu (`50k cf` hoặc `cf 50k`).
@@ -147,13 +157,13 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - **Cơ chế Long Polling qua Java 21 HttpClient**:
   - Chạy ngầm 24/7 trên localhost hoặc server mà không cần mở port modem, không cần cấu hình domain hay ngrok/tunnel HTTPS.
 
-### 13. 📊 Màn hình Tổng quan Hợp nhất (Aggregated Dashboard)
+### 14. 📊 Màn hình Tổng quan Hợp nhất (Aggregated Dashboard)
 - **API gom cụm dữ liệu tổng hợp (`GET /dashboard`)**:
   - Gom trọn bộ 5 khối dữ liệu chỉ trong **1 request duy nhất**: 8 chỉ số KPI tài chính, chuỗi điểm dữ liệu biểu đồ xu hướng ngày (`chartPoints`), danh sách thẻ ví & số dư, tổng hợp ngân sách sử dụng và 6 giao dịch gần đây nhất.
   - Tối ưu hóa round-trip request từ Frontend Vue.js 3 xuống tối thiểu, giảm độ trễ tải trang và tăng tốc độ hiển thị cho người dùng.
   - Hỗ trợ tham số lọc theo tháng và năm (`month`, `year`), mặc định lấy tháng/năm hiện tại nếu bỏ trống.
 
-### 14. 🔮 Dự báo Dòng tiền Cá nhân (Personal Cashflow Forecast)
+### 15. 🔮 Dự báo Dòng tiền Cá nhân (Personal Cashflow Forecast)
 - **Dự báo dòng tiền thông minh (`GET /cashflow/forecast`)**:
   - Tự động phân tích dòng tiền của tháng hiện tại hoặc bất kỳ tháng nào trong tương lai theo tham số `targetMonth=MM/yyyy`.
   - **Thu chi thực tế (`actualSoFar`)**: Tổng hợp chi tiết thu nhập, chi tiêu và dòng tiền ròng thực tế phát sinh từ đầu tháng đến ngày hiện tại.
@@ -165,19 +175,7 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
     - Cung cấp khuyến nghị tài chính thông minh (`advice`) bám sát tình hình thực tế.
   - **Đối soát ngân sách chi tiêu (`budgetComparison`)**: So sánh tổng ngân sách đã thiết lập với tổng chi dự kiến, tính toán độ lệch (`variance`) và cờ cảnh báo vỡ ngân sách (`isOverBudget`).
 
-### 15. 💾 Sao lưu & Khôi phục Dữ liệu 1-Click (1-Click Backup & Restore)
-- **Sao lưu toàn diện 1-Click (`POST /backup/export`)**:
-  - Xuất toàn bộ 11 bảng dữ liệu cá nhân (tài khoản, thẻ tag, giao dịch, thẻ giao dịch, giao dịch định kỳ, ngân sách, thẻ ngân sách, mục tiêu tiết kiệm, đóng góp quỹ, sổ nợ, thanh toán nợ) ra 1 file JSON chuẩn UTF-8.
-  - Tên file chuẩn hóa theo ID người dùng và mốc thời gian: `backup_{userId}_{yyyy-MM-ddTHH-mm}.json`.
-  - Tùy chọn kèm ảnh hóa đơn (`includeImages=true|false`).
-- **Thẩm định an toàn trước khi khôi phục (`POST /backup/validate`)**:
-  - Tiếp nhận file backup qua `multipart/form-data`.
-  - Kiểm tra tính hợp lệ của cấu trúc JSON, phiên bản schema (`schemaVersion: 1.0`), kiểm tra email sở hữu và đếm chi tiết số lượng bản ghi của từng bảng dữ liệu.
-- **Khôi phục linh hoạt & Siêu an toàn (`POST /backup/import`)**:
-  - **Chế độ `overwrite` (Khuyến nghị)**: Tự động gỡ các khóa ngoại chéo (`transfer_id`, `transaction_id`), xóa sạch toàn bộ dữ liệu cũ của user theo đúng quan hệ cha - con, và nạp lại toàn bộ dữ liệu sạch từ file backup.
-  - **Chế độ `merge` (Upsert)**: Đối soát theo ID bản ghi. Nếu đã có trong DB $\rightarrow$ cập nhật lại thông tin mới nhất và thời gian tạo chuẩn; nếu chưa có $\rightarrow$ chèn mới.
-  - **Kiến trúc Native JDBC (`JdbcTemplate`)**: Tách biệt 100% khỏi vòng đời Hibernate Entity (`@GeneratedValue`), giải quyết dứt điểm các ngoại lệ `detached entity passed to persist`, `OptimisticLockException` và `UnexpectedRollbackException`.
-  - **Bảo toàn thời gian gốc**: Khôi phục chính xác 100% mốc thời gian tạo (`createdAt`) và cập nhật (`updatedAt`) ban đầu của các giao dịch, không bị JPA `@PrePersist` đè thành ngày hôm nay.
+### 16. 💾 Sao lưu & Khôi phục Dữ liệu 1-Click (1-Click Backup & Restore)
 
 ### 16. 📂 Quản lý Danh mục Thu / Chi từ Cơ sở Dữ liệu (Database-driven Categories)
 - **Chuẩn hóa Block ID số học**: Chuyển đổi toàn diện từ hằng số hardcode sang các bảng CSDL (`categories`, `transaction_types`) với bộ Block ID số trực quan:
@@ -525,8 +523,12 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 ### 16. Danh mục Thu / Chi (`/categories`)
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
 |---|---|---|---|
-| `GET` | `/categories` | Public | Lấy danh sách tất cả các danh mục đang hoạt động (hỗ trợ lọc `?typeId={1\|2\|3}`) |
+| `GET` | `/categories?typeId={1\|2\|3}&includeInactive={true\|false}` | Public | Lấy danh sách danh mục (hỗ trợ lọc theo loại giao dịch `typeId` và trạng thái hoạt động `includeInactive`) |
 | `GET` | `/categories/{id}` | Public | Lấy thông tin chi tiết một danh mục theo ID |
+| `POST` | `/categories` hoặc `/categories/create` | Authenticated / Public | Khởi tạo danh mục mới (tự sinh Block ID theo loại giao dịch và mã code định danh) |
+| `POST` | `/categories/{id}` | Authenticated / Public | Cập nhật thông tin danh mục (tên, tên tiếng Việt, code, màu sắc hex, icon Bootstrap, thứ tự, trạng thái) |
+| `POST` | `/categories/{id}/status?active={true\|false}` | Authenticated / Public | Bật (kích hoạt) hoặc Tạm ẩn danh mục nhanh chóng |
+| `DELETE` | `/categories/{id}` | Authenticated / Public | Xóa danh mục an toàn (chặn xóa danh mục hệ thống; tự động chuyển xóa mềm nếu đã có dữ liệu liên kết) |
 
 ### 17. Loại Giao dịch (`/transaction-types`)
 | Method | Endpoint | Yêu cầu quyền | Mô tả |
@@ -609,27 +611,27 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
 ## 🔢 Bảng tra cứu Hằng số (Constants Reference)
 
 ### 1. Phân loại Danh mục (`Category` — Phân dải theo Block 1xx, 2xx, 3xx)
-| ID | Tên danh mục | Phân loại | Ghi chú |
-|---|---|---|---|
-| `101`| Food (Ăn uống) | Expense | Chi tiêu thiết yếu 🍜 |
-| `102`| Transport (Di chuyển) | Expense | Chi tiêu thiết yếu 🛵 |
-| `103`| Entertainment (Giải trí) | Expense | Chi tiêu cá nhân 🎮 |
-| `104`| Utilities (Hóa đơn / Tiện ích) | Expense | Điện thoại, điện, nước, internet... 💡 |
-| `105`| Healthcare (Y tế & Sức khỏe) | Expense | Thuốc men, khám sức khỏe... 💊 |
-| `106`| Education (Giáo dục) | Expense | Học phí, sách vở, khóa học... 📚 |
-| `107`| Shopping (Mua sắm) | Expense | Quần áo, thiết bị... 🛍️ |
-| `108`| Housing (Nhà ở) | Expense | Tiền thuê nhà, bảo trì... 🏠 |
-| `109`| Debt (Trả nợ / Thu nợ) | Expense / Debt | **Được tự động loại trừ khỏi báo cáo thu/chi thông thường** 💳 |
-| `110`| Traveling (Du lịch) | Expense | Chi tiêu du lịch, vé máy bay, khách sạn ✈️ |
-| `111`| Present (Quà biếu / Tặng) | Expense | Quà biếu, quà sinh nhật, cưới hỏi, mừng lễ, từ thiện... 🎁 |
-| `112`| Other Expense (Chi tiêu khác) | Expense | Các khoản chi phí khác 📦 |
-| `201`| Salary (Tiền lương) | Income | Thu nhập cố định 💵 |
-| `202`| Business (Kinh doanh) | Income | Thu nhập từ buôn bán, kinh doanh 💼 |
-| `203`| Investments (Đầu tư) | Income | Cổ phiếu, lợi nhuận đầu tư 📈 |
-| `204`| Gifts (Quà tặng) | Income | Tiền mừng, quà biếu 🎁 |
-| `205`| Other Income (Thu nhập khác) | Income | Các khoản thu khác 💰 |
-| `301`| Transfer (Chuyển khoản nội bộ) | Transfer | **Chuyển giữa 2 ví, loại trừ khỏi báo cáo thu/chi để tránh trùng lặp** 🔄 |
-| `302`| Savings (Tiết kiệm / Góp quỹ) | Savings | Nạp hoặc rút từ mục tiêu tiết kiệm 🏦 |
+| ID | Tên chuẩn (EN) | Tên tiếng Việt | Icon Bootstrap | Mã Màu | Phân loại | Ghi chú |
+|---|---|---|---|---|---|---|
+| `101`| Food | Ăn uống | `bi-fork-knife` | `#FF6384` | Expense | Chi tiêu thiết yếu 🍜 |
+| `102`| Transport | Di chuyển | `bi-car-front-fill` | `#36A2EB` | Expense | Chi tiêu thiết yếu 🛵 |
+| `103`| Entertainment | Giải trí | `bi-controller` | `#FFCE56` | Expense | Chi tiêu cá nhân 🎮 |
+| `104`| Utilities | Hóa đơn & Tiện ích | `bi-lightning-charge-fill` | `#4BC0C0` | Expense | Điện thoại, điện, nước, internet... 💡 |
+| `105`| Healthcare | Y tế & Sức khỏe | `bi-heart-pulse-fill` | `#9966FF` | Expense | Thuốc men, khám sức khỏe... 💊 |
+| `106`| Education | Giáo dục | `bi-mortarboard-fill` | `#FF9F40` | Expense | Học phí, sách vở, khóa học... 📚 |
+| `107`| Shopping | Mua sắm | `bi-bag-heart-fill` | `#C9CBCF` | Expense | Quần áo, thiết bị... 🛍️ |
+| `108`| Housing | Nhà ở | `bi-house-door-fill` | `#8AC249` | Expense | Tiền thuê nhà, bảo trì... 🏠 |
+| `109`| Debt | Trả nợ | `bi-credit-card-2-front-fill` | `#E91E63` | Expense / Debt | **Được tự động loại trừ khỏi báo cáo thu/chi thông thường** 💳 |
+| `110`| Traveling | Du lịch | `bi-airplane-fill` | `#00BCD4` | Expense | Chi tiêu du lịch, vé máy bay, khách sạn ✈️ |
+| `111`| Present | Quà biếu / Tặng | `bi-gift-fill` | `#FF5722` | Expense | Quà biếu, quà sinh nhật, cưới hỏi, mừng lễ, từ thiện... 🎁 |
+| `112`| Other Expense | Chi tiêu khác | `bi-tags-fill` | `#607D8B` | Expense | Các khoản chi phí khác 📦 |
+| `201`| Salary | Tiền lương | `bi-cash-coin` | `#2ECC71` | Income | Thu nhập cố định 💵 |
+| `202`| Business | Kinh doanh | `bi-briefcase-fill` | `#F39C12` | Income | Thu nhập từ buôn bán, kinh doanh 💼 |
+| `203`| Investments | Đầu tư | `bi-graph-up-arrow` | `#1ABC9C` | Income | Cổ phiếu, lợi nhuận đầu tư 📈 |
+| `204`| Gifts | Quà tặng | `bi-gift-fill` | `#E74C3C` | Income | Tiền mừng, quà biếu nhận về 🎁 |
+| `205`| Other Income | Thu nhập khác | `bi-cash-stack` | `#95A5A6` | Income | Các khoản thu khác 💰 |
+| `301`| Transfer | Chuyển khoản | `bi-arrow-left-right` | `#3498DB` | Transfer | **Chuyển giữa 2 ví, loại trừ khỏi báo cáo thu/chi để tránh trùng lặp** 🔄 |
+| `302`| Savings | Tiết kiệm / Góp quỹ | `bi-piggy-bank-fill` | `#F1C40F` | Savings | Nạp hoặc rút từ mục tiêu tiết kiệm 🏦 |
 
 ### 2. Loại Giao dịch (`TransactionType`)
 | ID | Mã loại | Mô tả hành vi số dư ví |
@@ -715,6 +717,15 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
      $$\text{usedPercentage} = \frac{\text{totalSpending}}{\text{totalBudget}} \times 100\%$$
      *(được làm tròn 2 chữ số thập phân theo quy tắc HALF_UP)*.
    - Khi $\text{usedPercentage} > 100\%$ hoặc $\text{remainingAmount} < 0$, hệ thống tự động đánh dấu trạng thái "Vượt quá chi tiêu" và bật cờ cảnh báo bội chi `isOverBudget = true`.
+
+5. **Toàn vẹn Dữ liệu & Quy tắc Xóa Danh mục An toàn (Category Integrity & Safe Delete Guard)**:
+   - **Bảo vệ Danh mục Hệ thống**: Hệ thống duy trì 19 danh mục cốt lõi (`isSystem = true` hoặc ID $\le 302$). Mọi thao tác gọi API `DELETE` vào danh mục hệ thống đều bị chặn lại nhằm đảm bảo tính ổn định của hệ thống. Người dùng chỉ có thể tùy chỉnh tên hiển thị, icon, màu sắc hoặc tạm ẩn danh mục (`isActive = false`).
+   - **Xóa mềm Tự động khi Có Ràng buộc (Auto Soft Delete Fallback)**: Khi người dùng yêu cầu xóa một danh mục tùy biến (`isSystem = false`), hệ thống kiểm tra sự tồn tại của danh mục trong các bảng nghiệp vụ liên quan:
+     - Giao dịch thực tế (`transactions`)
+     - Ngân sách chi tiêu (`budgets`)
+     - Quy tắc lặp định kỳ (`recurring_transactions`)
+     Nếu đã phát sinh ít nhất một bản ghi liên kết, hệ thống tự động chuyển sang chế độ **Tạm ẩn / Vô hiệu hóa (`isActive = false`)** thay vì xóa cứng. Nhờ đó, toàn bộ lịch sử chi tiêu, báo cáo tài chính và sổ sách của các tháng trước vẫn được bảo toàn nguyên vẹn 100%. Danh mục chỉ bị xóa cứng (`DELETE FROM categories`) khi hoàn toàn chưa từng được sử dụng.
+   - **Đồng bộ Dữ liệu Khởi động & Quản lý Cache**: `CategoryDataInitializer` đảm bảo 19 danh mục hệ thống luôn tồn tại và cập nhật đầy đủ màu sắc, icon, tên tiếng Việt khi server khởi động. Mọi thay đổi CRUD danh mục đều tự động kích hoạt `@CacheEvict(value = "categories", allEntries = true)` để đồng bộ ngay lập tức cho các API giao dịch và frontend.
 
 ---
 

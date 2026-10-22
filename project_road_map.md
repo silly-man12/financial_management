@@ -34,7 +34,7 @@ flowchart TD
     end
 
     subgraph L3["3. Tầng Điều Khiển API (REST Controllers)"]
-        ApiControllers["14 REST Controllers<br/>(/auth, /accounts, /transactions, /budgets, /reports, /categories, /transaction-types...)"]:::controller
+        ApiControllers["17 REST Controllers<br/>(/auth, /accounts, /transactions, /budgets, /reports, /categories, /transaction-types, /dashboard, /cashflow, /backup...)"]:::controller
     end
 
     subgraph L4["4. Tầng Nghiệp Vụ & Tác Vụ Nền (Business Logic & Workers)"]
@@ -77,7 +77,7 @@ flowchart TD
 |---|---|---|
 | **1. Client & Inbound Layer** | Vue.js App, Telegram App, Webhook Providers | Điểm tương tác của người dùng và các bên thứ ba gửi dữ liệu vào hệ thống. |
 | **2. Security & Gateway** | Spring Security 6, `AuthFilter`, `WebConfig` (CORS) | Chặn lọc truy cập trái phép, giải mã JWT Token, kiểm tra quyền hạn, cấu hình CORS cho phép Vue App (`localhost:5173`) kết nối an toàn. |
-| **3. REST Controller Layer** | 14 Controllers (`TransactionController`, `AccountController`, `CategoryController`, `TransactionTypeController`...) | Tiếp nhận HTTP Request, validate dữ liệu đầu vào (Bean Validation), đóng gói phản hồi chuẩn `AbstractResponse<T>`. |
+| **3. REST Controller Layer** | 17 Controllers (`TransactionController`, `AccountController`, `CategoryController`, `TransactionTypeController`, `DashboardController`, `CashflowController`, `BackupController`...) | Tiếp nhận HTTP Request, validate dữ liệu đầu vào (Bean Validation), đóng gói phản hồi chuẩn `AbstractResponse<T>`. |
 | **4. Business Logic & Workers** | Services, JPA Specifications, Cronjobs, Telegram Engine | Xử lý logic nghiệp vụ tài chính, đảm bảo giao dịch nguyên tử `@Transactional`, chạy ngầm cronjob định kỳ và điều phối bot Telegram. |
 | **5. Persistence & Storage** | Spring Data JPA Repositories, MS SQL Server, Disk Storage | Truy vấn dữ liệu hiệu năng cao, đảm bảo toàn vẹn dữ liệu sao kê, lưu trữ hình ảnh hóa đơn tại thư mục `images/`. |
 | **6. External Integrations** | Gemini AI, Gmail SMTP, Exchange Rate API | Mở rộng tính năng tự động: đọc hóa đơn qua AI, gửi mail xác thực và cập nhật tỷ giá thị trường. |
@@ -209,14 +209,24 @@ flowchart TD
   - **Mode `overwrite`**: Gỡ khóa ngoại chéo (`transfer_id`, `transaction_id`), xóa sạch dữ liệu cũ theo quan hệ cha - con và chèn mới toàn bộ dữ liệu sạch.
   - **Mode `merge` (Upsert)**: Kiểm tra bản ghi tồn tại theo ID. Nếu đã có $\rightarrow$ cập nhật lại thời gian tạo/sửa chuẩn và thông tin mới nhất; nếu chưa có $\rightarrow$ chèn mới.
 
-#### 6. Chuyển Đổi Danh Mục & Loại Giao Dịch Sang Database (Block ID Migration) & Tối Ưu Swagger:
-- [x] **Chuẩn hóa Block ID số học**:
+#### 6. Chuyển Đổi Danh Mục & Loại Giao Dịch Sang Database (Block ID Migration) & Hoàn Thiện CRUD API:
+- [x] **Chuẩn hóa Block ID số học & Thuộc tính Giao diện**:
   - Chuyển đổi toàn diện từ hằng số hardcode sang các bảng CSDL `categories` và `transaction_types`.
-  - Phân dải ID theo Block khoa học: Chi tiêu (`101..112`), Thu nhập (`201..205`), Chuyển khoản & Tiết kiệm (`301..302`); `1: EXPENSE`, `2: INCOME`, `3: TRANSFER` cho `TransactionType`.
+  - Phân dải ID theo Block khoa học: Chi tiêu (`101..199`), Thu nhập (`201..299`), Chuyển khoản & Tiết kiệm (`301..399`); `1: EXPENSE`, `2: INCOME`, `3: TRANSFER` cho `TransactionType`.
+  - Mở rộng bảng `categories` với 2 trường mới: `color VARCHAR(20)` (mã màu Hex dạng `#FF6384`) và `icon NVARCHAR(50)` (lớp biểu tượng Bootstrap Icons `bi-fork-knife`, `bi-car-front-fill`...), chuẩn hóa tên hiển thị tiếng Việt có dấu `nameVi`.
   - Thiết lập ràng buộc khóa ngoại (Foreign Key constraints) toàn vẹn dữ liệu cho `transactions`, `budgets`, `recurring_transactions`.
-- [x] **RESTful APIs & Caching**:
-  - Xây dựng `CategoryController` (`/categories`) và `TransactionTypeController` (`/transaction-types`) kèm Spring Cache (`@Cacheable`) truy xuất siêu tốc.
-  - Cấu hình Spring Security mở quyền công khai cho các endpoint danh mục và loại giao dịch.
+- [x] **Trọn bộ RESTful API CRUD cho Danh Mục (`CategoryController`)**:
+  - `GET /categories`: Hỗ trợ lọc theo `typeId` và `includeInactive` (phục vụ cả màn hình giao dịch chỉ lấy danh mục đang bật lẫn màn hình quản lý danh mục lấy toàn bộ).
+  - `GET /categories/{id}`: Tra cứu thông tin chi tiết một danh mục.
+  - `POST /categories` & `POST /categories/create`: Tạo danh mục mới với cơ chế tự cấp phát ID theo Block (`findMaxIdInRange`), tự động sinh mã `code` từ tên tiếng Việt không dấu.
+  - `PUT /categories/{id}` & `POST /categories/{id}`: Cập nhật thông tin, icon, màu sắc, thứ tự hiển thị, trạng thái hoạt động.
+  - `POST /categories/{id}/status?active={true|false}`: API chuyển đổi trạng thái Bật/Tạm ẩn một chạm.
+  - `DELETE /categories/{id}`: Cơ chế xóa an toàn (Safe Delete Guard) - chặn xóa danh mục hệ thống, tự động fallback sang xóa mềm (`isActive = false`) khi đã có giao dịch/ngân sách/quy tắc định kỳ liên kết.
+- [x] **Khởi tạo Dữ liệu Tự Động & Quản lý Cache**:
+  - Triển khai `CategoryDataInitializer` (`ApplicationRunner`) tự động kiểm tra, seed mới hoặc đồng bộ hóa đầy đủ 19 danh mục tiêu chuẩn (icon, color, nameVi) ngay khi khởi động ứng dụng.
+  - Tích hợp Spring Cache `@Cacheable(value = "categories")` và dọn dẹp cache tự động `@CacheEvict(value = "categories", allEntries = true)` trên tất cả các thao tác thêm, sửa, đổi trạng thái và xóa danh mục.
+- [x] **Hỗ trợ Toàn diện Giao diện Vue 3 Client**:
+  - Cung cấp API tương thích 100% cho màn hình Quản lý Danh mục (`Categories.vue`) và Form Danh mục hiện đại (`CategoryForm.vue`) với bộ chọn màu sắc (color swatches) và bộ chọn biểu tượng (icon picker theo nhóm, tìm kiếm tức thì, squircle avatar).
 - [x] **Khắc phục triệt để lỗi xung đột Swagger UI (`operationId` collision)**:
   - Khắc phục lỗi Swagger UI execute sai API (ví dụ `/transactions/all` chuyển hướng sang `/tags`) do trùng tên method `getAll` ở nhiều Controller.
   - Triển khai `GlobalOpenApiCustomizer` trong `SwaggerConfig.java` tự động gán `operationId` duy nhất toàn cục theo mẫu `[httpMethod]_[cleanPath]`.

@@ -12,6 +12,8 @@ import com.example.financial_management.entity.Budget;
 
 @Repository
 public interface BudgetRepository extends JpaRepository<Budget, UUID> {
+    boolean existsByCategory(int category);
+
     List<Budget> findAllByUserId(UUID userId);
 
     List<Budget> findAllByUserIdAndMonthAndYear(UUID userId, int month, int year);
