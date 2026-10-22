@@ -22,6 +22,8 @@ import com.example.financial_management.model.report.response.CategoryReportItem
 import com.example.financial_management.model.report.response.MonthlyReportResponseItem;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID>, JpaSpecificationExecutor<Transaction> {
+    boolean existsByCategory(int category);
+
     @EntityGraph(attributePaths = {"tags"})
     Page<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 

@@ -45,8 +45,11 @@ public class CategoryEntity {
     @Column(name = "name_vi", nullable = false, length = 100)
     private String nameVi;
 
-    @Column(name = "icon", length = 10)
+    @Column(name = "icon", length = 50)
     private String icon;
+
+    @Column(name = "color", length = 20)
+    private String color;
 
     @Column(name = "is_system", nullable = false)
     @Builder.Default
