@@ -189,6 +189,20 @@ Hệ thống Backend xây dựng trên nền tảng **Spring Boot 3** và **Java
 - Chuẩn hóa loại giao dịch lưu trữ CSDL trong bảng `transaction_types` với ID số tự nhiên: `1: EXPENSE` (Chi tiêu), `2: INCOME` (Thu nhập), `3: TRANSFER` (Chuyển khoản).
 - Cung cấp RESTful API công khai (`GET /transaction-types`, `GET /transaction-types/{id}`) kèm Spring Cache.
 
+### 18. 🏦 Tự động Hóa Biến Động Số Dư Ngân Hàng qua SePay Webhook (Bank Balance Webhook)
+- **Tiếp nhận biến động số dư thời gian thực (`POST /webhooks/bank/sepay`, `POST /api/v1/webhooks/bank`)**:
+  - Tích hợp trực tiếp cổng **SePay** cho tài khoản ngân hàng (MB Bank, Vietcombank, Techcombank...), bao gồm cả các giao dịch thanh toán qua ví điện tử (ZaloPay/MoMo) có ưu tiên trích nguồn tiền trực tiếp từ tài khoản ngân hàng liên kết.
+- **Tự động lưu lịch sử sự kiện, ghi nhận `Transaction` & đồng bộ số dư ví**:
+  - Lưu trữ toàn bộ payload và trạng thái xử lý vào bảng `bank_webhook_events` (`RECEIVED`, `PROCESSED`, `DUPLICATE`, `SKIPPED`, `FAILED`).
+  - **Chống ghi trùng tuyệt đối (Idempotency)**: Kiểm tra cặp khóa duy nhất `(provider, external_id)` để khi SePay retry webhook nhiều lần thì hệ thống không bao giờ cộng/trừ tiền hai lần.
+  - **Tự động ánh xạ ví thông minh**: Tự động khớp ví theo cấu hình `wallet_source_mappings`, số tài khoản, tên cổng ngân hàng (`MBBank`, `MB Bank`, `MB`...) hoặc tự động khởi tạo ví ngân hàng mới nếu tài khoản chưa có ví.
+  - **Đồng bộ số dư an toàn**: Nếu số dư ví trên Web đang thấp hơn số tiền chi ra (ví dụ ví mới tạo đang có số dư `0đ`), hệ thống tự động đồng bộ theo số dư thực tế (`accumulated`) từ SePay gửi về thay vì báo lỗi `Insufficient balance`.
+  - **Tự động phục hồi khi khởi động (`recoverUnprocessedWebhookEventsOnStartup`)**: Quét và xử lý bù các sự kiện webhook chưa có `transaction_id` ngay khi ứng dụng khởi chạy.
+- **Phân loại danh mục tự động (`BankTransactionClassifier`)**:
+  - Ưu tiên áp dụng quy tắc từ khóa cá nhân hóa của người dùng (`BankCategoryRule` — bảng `bank_category_rules`), sau đó kết hợp bộ từ điển NLP tiếng Việt của `TelegramMessageParser`, và fallback an toàn theo chiều giao dịch (`112: OTHER_EXPENSE` hoặc `205: OTHER_INCOME`).
+- **Thông báo & Cảnh báo ngân sách tức thì qua Telegram (`BankWebhookNotifier`)**:
+  - Ngay sau khi lưu `Transaction`, bot Telegram tự động gửi tin nhắn báo biến động số dư (hiển thị số tiền cộng/trừ, danh mục, nội dung giao dịch, số dư ví mới, trạng thái ngân sách còn lại và cảnh báo nếu chạm ngưỡng $\ge 90\%$).
+
 ---
 
 ## 🛠️ Công nghệ sử dụng
@@ -236,10 +250,11 @@ financial_management/
         │   │   │   └── base/          # Base Entity (UUID id, Audit createdAt, updatedAt...)
         │   │   ├── exception/         # Xử lý lỗi toàn cục (Global Exception Handler) & Deserializers
         │   │   ├── mapper/            # MapStruct mappers (SavingGoalMapper, DebtMapper...)
-        │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse, telegram/
-        │   │   ├── repository/        # Spring Data JPA Repositories (TransactionRepository, ...)
-        │   │   ├── services/          # Business Logic Services (TransactionService, ReportService, CashflowService, BackupService...)
+        │   │   ├── model/             # DTOs: Request/Response, PageResponse, AbstractResponse, telegram/, webhook/
+        │   │   ├── repository/        # Spring Data JPA Repositories (TransactionRepository, BankWebhookEventRepository...)
+        │   │   ├── services/          # Business Logic Services (TransactionService, ReportService, BankWebhookService...)
         │   │   ├── telegram/          # Telegram Bot: Config, Client, PollingService, Parser, CommandHandler, Service
+        │   │   ├── webhook/           # Bank Webhook (SePay): Verifiers (SePayVerifier), Adapters (SePayPayloadAdapter), Models
         │   │   └── util/              # Tiện ích bổ trợ (JwtTokenUtil, DateTimeUtils...)
         │   └── resources/
         │       └── application.properties # Cấu hình Database, Mail, JWT, Cổng chạy...
@@ -317,6 +332,13 @@ google.oauth.client-secret=your_google_client_secret
 google.oauth.redirect-uri=http://localhost:8080/auth/google-callback
 google.oauth.path=/sign-in/google
 base.url=http://localhost:8080
+
+# Cấu hình Bank Balance Webhook (SePay - MB Bank / Ngân hàng)
+bank.webhook.enabled=true
+bank.webhook.default-user-email=admin@example.com
+bank.webhook.sepay.api-key=your_sepay_webhook_api_key
+bank.webhook.replay-window-seconds=300
+bank.webhook.notify-telegram=true
 ```
 
 ---
@@ -535,6 +557,21 @@ Tất cả các API chuẩn hóa đều trả về theo định dạng vỏ bao 
 |---|---|---|---|
 | `GET` | `/transaction-types` | Public | Lấy danh sách toàn bộ loại giao dịch (Chi tiêu, Thu nhập, Chuyển khoản) |
 | `GET` | `/transaction-types/{id}` | Public | Lấy thông tin chi tiết loại giao dịch theo ID |
+
+### 18. Webhook Biến Động Số Dư Ngân Hàng - SePay (`/webhooks/bank`)
+| Method | Endpoint | Yêu cầu quyền | Mô tả |
+|---|---|---|---|
+| `POST` | `/webhooks/bank/sepay` hoặc `/api/v1/webhooks/bank` | Public (SePay `Apikey`) | **Endpoint nhận Webhook trực tiếp từ SePay**: Xác thực API Key, lưu sự kiện `bank_webhook_events`, tự động tạo `Transaction`, cập nhật số dư ví và bắn thông báo Telegram |
+| `GET` | `/webhooks/bank/events?status={s}&page=0&size=20` | Authenticated | Xem lịch sử các sự kiện biến động số dư ngân hàng đã nhận từ SePay (hỗ trợ lọc theo `status`) |
+| `POST` | `/webhooks/bank/events/{id}/reprocess` | Authenticated | Xử lý lại một sự kiện webhook bị `SKIPPED` hoặc `FAILED` sau khi đã cấu hình ví |
+| `POST` | `/webhooks/bank/events/reprocess-all` | Authenticated | Tự động xử lý bù toàn bộ các sự kiện webhook đang chờ xử lý (`SKIPPED` / `RECEIVED`) |
+| `GET` | `/webhooks/bank/mappings` | Authenticated | Lấy danh sách cấu hình ánh xạ số tài khoản ngân hàng (`sourceKey`) sang ví (`accountId`) |
+| `POST` | `/webhooks/bank/mappings` | Authenticated | Tạo hoặc cập nhật ánh xạ số tài khoản ngân hàng sang ví đích |
+| `DELETE` | `/webhooks/bank/mappings/{id}` | Authenticated | Xóa cấu hình ánh xạ nguồn ngân hàng |
+| `GET` | `/webhooks/bank/rules` | Authenticated | Lấy danh sách quy tắc từ khóa tự động phân loại danh mục giao dịch ngân hàng |
+| `POST` | `/webhooks/bank/rules` | Authenticated | Thêm quy tắc từ khóa phân loại danh mục mới (`keyword`, `category`, `direction`, `priority`) |
+| `DELETE` | `/webhooks/bank/rules/{id}` | Authenticated | Xóa quy tắc từ khóa phân loại danh mục |
+| `POST` | `/webhooks/bank/simulate` | Authenticated | Giả lập gửi payload JSON SePay để kiểm thử luồng tạo giao dịch và thông báo Telegram |
 
 ---
 
@@ -764,3 +801,7 @@ Khi xảy ra lỗi (Validation, Resource Not Found, Sai định dạng request, 
    - **Bảo vệ Phân quyền & Loại trừ Lỗ hổng IDOR trên API Telegram**:
      - Tất cả các endpoint quản lý trạng thái, tạo mã OTP, hủy kết nối và cấu hình thông báo (`/telegram/**`) đều được bảo vệ bằng JWT Token (`@AuthenticationPrincipal Auth`).
      - Endpoint giả lập `/telegram/simulate` được ràng buộc chặt chẽ với định danh tài khoản đang đăng nhập; chỉ tài khoản `ROLE_ADMIN` mới có quyền giả lập cho email khác, ngăn ngừa hoàn toàn nguy cơ thao túng dữ liệu trái phép.
+
+7. **Bảo mật Webhook Ngân hàng (SePay Constant-Time Verification & Idempotency)**:
+   - **Xác thực Hằng Thời Gian (`MessageDigest.isEqual`)**: `SePayVerifier` kiểm tra header `Authorization: Apikey <key>` (hoặc chữ ký HMAC-SHA256 `X-Webhook-Signature`) bằng thuật toán so sánh mảng byte hằng thời gian để chống tấn công dò khóa theo thời gian phản hồi (Timing Attack).
+   - **Chống Ghi Trùng & Xử Lý Đồng Thời (`OptimisticLock` Retry + Unique Constraint)**: Bảng `bank_webhook_events` áp dụng ràng buộc duy nhất `uk_bank_webhook_provider_ext (provider, external_id)` kết hợp cơ chế tự động retry khi gặp xung đột `OptimisticLockException` trên `Account.version`, đảm bảo an toàn tuyệt đối khi có nhiều giao dịch biến động số dư đổ về cùng lúc.

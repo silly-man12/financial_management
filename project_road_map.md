@@ -104,7 +104,7 @@ flowchart TD
 |:---:|:---|:---|:---:|:---:|
 | **Phase 1** | **Core Backend & Telegram Bot** | Xây dựng 12 Controllers, Entity, SQL Server, Auth JWT, Cronjobs, Telegram Bot | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
 | **Phase 2** | **Tối Ưu Hóa API Cho Frontend Vue.js** | CORS, Contract Response, API Widgets, Phân trang Specification, Swagger OpenAPI, Global Error Handling, Image URLs | ![Completed](https://img.shields.io/badge/Status-Hoàn%20Tất-success) | **100%** |
-| **Phase 3** | **Webhook Ngân Hàng & Tích Hợp AI** | Endpoint Webhook bắt số dư ngân hàng, Gemini Vision OCR đọc bill, Voice Whisper | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-orange) | **0%** |
+| **Phase 3** | **Webhook Ngân Hàng & Tích Hợp AI** | Endpoint Webhook bắt số dư ngân hàng (SePay/ZaloPay), Gemini Vision OCR đọc bill, Voice Whisper | ![In Progress](https://img.shields.io/badge/Status-Đang%20Triển%20Khai-blue) | **50%** |
 | **Phase 4** | **Backend Quản Lý Tài Sản Ròng (Net Worth)** | Entity & Service Vàng, Tiền gửi tiết kiệm kỳ hạn, Cổ phiếu, API Báo cáo Net Worth | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
 | **Phase 5** | **Tối Ưu Hiệu Năng, Caching & Auto-Backup** | Redis Cache, Flyway DB Migration, Docker Compose, Script Auto Backup mã hóa | ![Planned](https://img.shields.io/badge/Status-Kế%20Hoạch-lightgrey) | **0%** |
 
@@ -261,10 +261,11 @@ sequenceDiagram
 ```
 
 #### Các hạng mục API & Backend chi tiết:
-- [ ] **Module Webhook Tiếp Nhận Biến Động Số Dư Ngân Hàng (`BankWebhookController`)**:
-  - Endpoint `POST /api/v1/webhooks/bank` tiếp nhận payload thông báo chuyển khoản/trừ tiền từ SePay/Casso.
-  - **Bảo mật Webhook**: Kiểm tra chữ ký bí mật (HMAC SHA-256 header) để đảm bảo request gửi đến thực sự từ dịch vụ ngân hàng, chặn tấn công giả mạo dữ liệu.
-  - **Quy tắc phân loại tự động**: Bóc tách nội dung chuyển khoản để nhận diện mã ví (VCB, MB, Techcombank) và tự động gắn danh mục chi tiêu/thu nhập.
+- [x] **Module Webhook Tiếp Nhận Biến Động Số Dư Ngân Hàng qua SePay (`BankWebhookController`)**:
+  - Các endpoint `POST /webhooks/bank/sepay` và `POST /api/v1/webhooks/bank` tiếp nhận trực tiếp biến động số dư từ SePay (MB Bank, bao gồm cả các giao dịch thanh toán qua ZaloPay ưu tiên nguồn tiền MB Bank liên kết).
+  - **Bảo mật Webhook**: Xác thực chuẩn hằng thời gian (`MessageDigest.isEqual`) cho SePay API Key (`Authorization: Apikey <key>`) và chữ ký HMAC-SHA256.
+  - **Tự động ghi nhận Transaction & Đối soát (`BankWebhookService`, `BankReconciliationService`)**: Mọi giao dịch tiền vào (`IN`) / tiền ra (`OUT`) từ SePay đều tự động lưu `bank_webhook_events`, tạo bản ghi `Transaction` trong bảng `transactions`, cập nhật số dư ví (tự động đồng bộ theo `accumulated` của SePay nếu số dư ví ban đầu thấp hơn số tiền trừ) và đối soát chuyển khoản nội bộ (`Category.TRANSFER = 301`) giữa các tài khoản ngân hàng.
+  - **Quy tắc phân loại & Thông báo Telegram (`BankTransactionClassifier`, `BankWebhookNotifier`)**: Kết hợp quy tắc từ khóa cá nhân hóa (`BankCategoryRule`) và bộ từ điển NLP tiếng Việt (`TelegramMessageParser`), gửi ngay tin nhắn xác nhận giao dịch kèm cảnh báo ngân sách qua Telegram Bot.
 - [ ] **Tích hợp Google Gemini Flash API cho OCR Hóa Đơn (`GeminiAiService`)**:
   - Tạo service gọi Gemini 1.5 Flash Vision API qua REST/SDK.
   - Endpoint `POST /transactions/scan-receipt`: Tiếp nhận file ảnh hóa đơn $\rightarrow$ Gửi lên Gemini kèm structured prompt (JSON Schema) $\rightarrow$ Trả về JSON chuẩn hóa: `{ amount: 154000, date: "2026-10-08", merchant: "WinMart", suggestedCategory: 1, note: "Mua thuc pham" }`.

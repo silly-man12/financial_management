@@ -603,7 +603,7 @@ public class TelegramCommandHandler {
      * - Nếu giao dịch KHÔNG gắn tag, hoặc CÓ tag nhưng CHƯA CÓ ngân sách nào gắn tag đó:
      *   hạch toán vào ngân sách chung của category đó (ngân sách không có tag, tự động trừ các tag có ngân sách riêng).
      */
-    private List<BudgetCheckingResponse> findAffectedBudgets(User user, TelegramParsedTransaction parsed, Auth auth) {
+    public List<BudgetCheckingResponse> findAffectedBudgets(User user, TelegramParsedTransaction parsed, Auth auth) {
         try {
             LocalDate now = LocalDate.now();
             List<BudgetCheckingResponse> budgets = budgetService.checkingBudget(now.getMonthValue(), now.getYear(), auth);
@@ -643,7 +643,7 @@ public class TelegramCommandHandler {
     /**
      * Gửi tin nhắn cảnh báo đỏ tức thì nếu ngân sách bị ảnh hưởng đạt >= 90% hạn mức.
      */
-    private void sendBudgetAlertsIfNeeded(long chatId, User user, List<BudgetCheckingResponse> affectedBudgets) {
+    public void sendBudgetAlertsIfNeeded(long chatId, User user, List<BudgetCheckingResponse> affectedBudgets) {
         if (affectedBudgets == null || affectedBudgets.isEmpty()) {
             return;
         }
@@ -685,12 +685,12 @@ public class TelegramCommandHandler {
         }
     }
 
-    private void checkAndSendBudgetAlert(long chatId, User user, TelegramParsedTransaction parsed, Auth auth) {
+    public void checkAndSendBudgetAlert(long chatId, User user, TelegramParsedTransaction parsed, Auth auth) {
         List<BudgetCheckingResponse> affectedBudgets = findAffectedBudgets(user, parsed, auth);
         sendBudgetAlertsIfNeeded(chatId, user, affectedBudgets);
     }
 
-    private String getBudgetDisplayName(BudgetCheckingResponse targetBudget) {
+    public String getBudgetDisplayName(BudgetCheckingResponse targetBudget) {
         String catBaseName = messageParser.getCategoryVietnameseName(targetBudget.getCategory());
         if (catBaseName == null || catBaseName.isBlank()) {
             catBaseName = "Danh mục #" + targetBudget.getCategory();
