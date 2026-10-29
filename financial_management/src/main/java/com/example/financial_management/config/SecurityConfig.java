@@ -48,7 +48,10 @@ public class SecurityConfig {
             "/currency-exchange/history",
             "/telegram/test-parse",
             "/categories/**",
-            "/transaction-types/**");
+            "/transaction-types/**",
+            "/webhooks/bank/sepay",
+            "/api/v1/webhooks/bank",
+            "/api/v1/webhooks/bank/**");
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

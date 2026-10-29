@@ -362,7 +362,7 @@ public class TelegramMessageParser {
     /**
      * Bảng từ điển nhận diện danh mục tài chính thông minh
      */
-    private int detectCategory(String text, int transactionType) {
+    public int detectCategory(String text, int transactionType) {
         if (text == null || text.isEmpty()) {
             return transactionType == TransactionType.INCOME ? Category.OTHER_INCOME : Category.OTHER_EXPENSE;
         }
